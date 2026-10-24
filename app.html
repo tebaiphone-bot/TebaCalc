@@ -1,0 +1,631 @@
+<title>TebaCalc 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-column phone app; stacked blocks for each cost layer, live price bar pinned at the bottom, tab bar under it. */
+:root {
+  --bg: #0f1311;
+  --surface: #181d1a;
+  --field: #222924;
+  --line: #2c352f;
+  --fg: #e8eee9;
+  --muted: #8e9a92;
+  --accent: #1fd16b;
+  --accent-ink: #04140a;
+  --danger: #ff6b5e;
+  --f-display: "Chakra Petch", "Rajdhani", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 190px;
+}
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.brand { font-family: var(--f-display); font-size: 28px; letter-spacing: .04em; font-weight: 500; margin: 0; line-height: 1; }
+.brand b { color: var(--accent); font-weight: 700; }
+.brand small { display: block; font-family: var(--f-body); font-size: 11px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; margin-top: 6px; }
+.example-note { font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 16px; }
+
+section.view { display: grid; gap: 22px; }
+.block { display: grid; gap: 10px; }
+.block > h2 {
+  margin: 0; font-family: var(--f-display); font-size: 14px; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--accent);
+}
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 360px) { .grid3 { grid-template-columns: 1fr 1fr; } }
+label.f { display: grid; gap: 5px; min-width: 0; }
+label.f > span { font-size: 12.5px; color: var(--muted); }
+input, select {
+  width: 100%; min-width: 0; font: inherit; color: var(--fg); background: var(--field); border: 1px solid transparent;
+  border-radius: 10px; padding: 11px 12px; outline: none;
+}
+input[type=number], .num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+input:focus-visible, select:focus-visible, button:focus-visible { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 1px; }
+input[type=color] { padding: 3px; height: 44px; }
+.unit { position: relative; }
+.unit input { padding-right: 46px; }
+.unit em { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 12px; color: var(--muted); pointer-events: none; }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+
+button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; color: var(--fg); background: var(--field); padding: 10px 14px; }
+button.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.ghost { background: transparent; border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); width: 100%; padding: 12px; font-weight: 600; }
+button.icon { background: transparent; color: var(--muted); padding: 6px 8px; font-size: 18px; line-height: 1; }
+button.danger { color: var(--danger); background: transparent; }
+button.danger.armed { background: var(--danger); color: #1a0402; }
+
+.fil { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.fil-head { display: flex; align-items: center; gap: 10px; }
+.dot { width: 16px; height: 16px; border-radius: 50%; flex: none; border: 2px solid var(--line); }
+.fil-head select { flex: 1; }
+
+/* Price bar */
+.pricebar {
+  position: fixed; left: 0; right: 0; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); z-index: 5;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+.pricebar .inner {
+  max-width: 560px; margin: 0 auto; background: var(--accent); color: var(--accent-ink); border-radius: 16px;
+  padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.pricebar .lbl { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; opacity: .75; }
+.pricebar .big { font-family: var(--f-num); font-size: 24px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.pricebar .unitp { font-size: 12px; opacity: .8; font-family: var(--f-num); }
+.pricebar button { background: var(--accent-ink); color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+}
+nav.tabs .inner { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); }
+nav.tabs button { background: transparent; border-radius: 0; padding: 10px 4px 12px; color: var(--muted); font-size: 12.5px; display: grid; justify-items: center; gap: 3px; height: 58px; }
+nav.tabs button svg { width: 22px; height: 22px; }
+nav.tabs button[aria-current=true] { color: var(--accent); }
+
+/* Breakdown sheet */
+.sheet-bg { position: fixed; inset: 0; background: rgb(0 0 0 / .6); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  background: var(--surface); border-radius: 18px 18px 0 0; width: 100%; max-width: 560px; max-height: 88%; overflow: auto;
+  padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  display: grid; gap: 14px; border: 1px solid var(--line);
+}
+.sheet h3 { margin: 0; font-family: var(--f-display); font-size: 20px; }
+.rows { display: grid; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.row > span:last-child { font-family: var(--f-num); font-variant-numeric: tabular-nums; text-align: right; }
+.row.sub { font-weight: 600; }
+.row.total { border-bottom: 0; font-size: 18px; color: var(--accent); font-weight: 600; padding-top: 10px; }
+.row .d { color: var(--muted); font-size: 12px; display: block; font-family: var(--f-body); }
+.bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--field); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions button { flex: 1 1 120px; }
+
+/* Lists */
+.list { display: grid; gap: 8px; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 4px; }
+.item .t { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.item .t b { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.item .t span { font-family: var(--f-num); color: var(--accent); white-space: nowrap; }
+.item .s { font-size: 12.5px; color: var(--muted); }
+.item .a { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+.item .a button { padding: 6px 10px; font-size: 13px; }
+.empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px 8px; border: 1px dashed var(--line); border-radius: 12px; }
+.syms { display: flex; flex-wrap: wrap; gap: 8px; }
+.syms button { min-width: 44px; font-family: var(--f-num); font-size: 17px; }
+.syms button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; z-index: 30; font-size: 14px; max-width: 90%; }
+textarea.copy { width: 100%; min-height: 160px; font: 13px var(--f-num); background: var(--field); color: var(--fg); border: 0; border-radius: 10px; padding: 10px; }
+.ver { text-align: center; color: var(--muted); font-size: 12px; }
+@media (prefers-reduced-motion: no-preference) { .sheet { animation: up .18s ease-out; } @keyframes up { from { transform: translateY(24px); opacity: .6; } } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">TEBA<b>CALC</b><small id="tagline"></small></h1>
+  </header>
+  <main id="main"></main>
+</div>
+<div class="pricebar" id="pricebar"><div class="inner">
+  <div><div class="lbl" id="pb-lbl"></div><div class="big" id="pb-total">0</div><div class="unitp" id="pb-unit"></div></div>
+  <button id="pb-btn" type="button"></button>
+</div></div>
+<nav class="tabs"><div class="inner" id="tabs"></div></nav>
+<div id="overlay"></div>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "tebacalc2";
+  var VERSION = "2.0";
+
+  var I18N = {
+    es: {
+      tagline: "Costos de impresión 3D", calc: "Calcular", history: "Historial", settings: "Ajustes",
+      example: "Valores de ejemplo cargados. Cambialos en Ajustes por tus materiales, tu impresora y tus precios.",
+      piece: "Pieza", jobName: "Nombre del trabajo", jobPh: "Ej: Llavero logo", client: "Cliente (opcional)", qty: "Piezas en la cama",
+      filaments: "Filamentos", material: "Material", manual: "— Manual —", spoolPrice: "Precio del rollo", spoolWeight: "Peso del rollo", grams: "Gramos usados", color: "Color",
+      addColor: "+ Agregar otro color", remove: "Quitar",
+      printing: "Impresión", printer: "Impresora", hours: "Horas", minutes: "Minutos", fail: "Fallo", kwh: "Luz por kWh",
+      work: "Trabajo", prep: "Preparación", post: "Post-procesado", rate: "Tarifa por hora", min: "min",
+      extras: "Extras", supplies: "Insumos", suppliesHint: "Pintura, insertos, imanes, tornillos.", pack: "Empaque", ship: "Envío",
+      sale: "Venta", profit: "Ganancia", fee: "Comisión plataforma", tax: "Impuesto",
+      profitHint: "0% = precio de costo. 100% = el doble del costo.",
+      finalPrice: "Precio final", perUnit: "por unidad", breakdown: "Desglose",
+      matCost: "Material", energy: "Luz", wear: "Desgaste impresora", failCost: "Margen por fallos", labor: "Mano de obra",
+      cost: "Costo total", profitAmt: "Ganancia", net: "Precio sin impuesto", feeAmt: "Comisión", taxAmt: "Impuesto",
+      save: "Guardar", saved: "Guardado en el historial", copyQuote: "Copiar cotización", copied: "Cotización copiada", newJob: "Nuevo",
+      copyFallback: "Seleccioná el texto y copialo:", close: "Cerrar",
+      noHistory: "Todavía no guardaste trabajos. Calculá uno y tocá Guardar en el desglose.", search: "Buscar por nombre o cliente",
+      open: "Abrir", del: "Eliminar", sure: "¿Seguro?", untitled: "Sin nombre",
+      myMaterials: "Mis materiales", myPrinters: "Mis impresoras", defaults: "Valores por defecto", general: "General",
+      name: "Nombre", type: "Tipo", add: "Agregar", watts: "Consumo", printerPrice: "Precio de compra", life: "Vida útil", maint: "Mantenimiento por hora",
+      symbol: "Símbolo de moneda", custom: "Otro", decimals: "Decimales", language: "Idioma",
+      backup: "Respaldo", exportData: "Exportar datos", importData: "Importar datos", importOk: "Datos importados", importBad: "El archivo no es un respaldo de TebaCalc.",
+      exportHint: "Copiá este texto y guardalo. Para restaurar, pegalo en Importar.", pasteHere: "Pegá acá el respaldo y tocá Importar.",
+      newMat: "Nuevo material", newPrinter: "Nueva impresora", noPrinter: "Sin impresora",
+      quote: "Cotización", qtyLabel: "Cantidad", time: "Tiempo", weight: "Material usado", date: "Fecha"
+    },
+    en: {
+      tagline: "3D printing costs", calc: "Calculate", history: "History", settings: "Settings",
+      example: "Example values loaded. Replace them in Settings with your materials, printer and prices.",
+      piece: "Part", jobName: "Job name", jobPh: "E.g. Logo keychain", client: "Client (optional)", qty: "Parts on the plate",
+      filaments: "Filaments", material: "Material", manual: "— Manual —", spoolPrice: "Spool price", spoolWeight: "Spool weight", grams: "Grams used", color: "Color",
+      addColor: "+ Add another color", remove: "Remove",
+      printing: "Printing", printer: "Printer", hours: "Hours", minutes: "Minutes", fail: "Failure", kwh: "Power per kWh",
+      work: "Labor", prep: "Preparation", post: "Post-processing", rate: "Hourly rate", min: "min",
+      extras: "Extras", supplies: "Supplies", suppliesHint: "Paint, inserts, magnets, screws.", pack: "Packaging", ship: "Shipping",
+      sale: "Sale", profit: "Profit", fee: "Platform fee", tax: "Tax",
+      profitHint: "0% = cost price. 100% = double the cost.",
+      finalPrice: "Final price", perUnit: "per unit", breakdown: "Breakdown",
+      matCost: "Material", energy: "Power", wear: "Printer wear", failCost: "Failure allowance", labor: "Labor",
+      cost: "Total cost", profitAmt: "Profit", net: "Price before tax", feeAmt: "Fee", taxAmt: "Tax",
+      save: "Save", saved: "Saved to history", copyQuote: "Copy quote", copied: "Quote copied", newJob: "New",
+      copyFallback: "Select the text and copy it:", close: "Close",
+      noHistory: "No saved jobs yet. Calculate one and tap Save in the breakdown.", search: "Search by name or client",
+      open: "Open", del: "Delete", sure: "Sure?", untitled: "Untitled",
+      myMaterials: "My materials", myPrinters: "My printers", defaults: "Defaults", general: "General",
+      name: "Name", type: "Type", add: "Add", watts: "Power draw", printerPrice: "Purchase price", life: "Lifespan", maint: "Maintenance per hour",
+      symbol: "Currency symbol", custom: "Other", decimals: "Decimals", language: "Language",
+      backup: "Backup", exportData: "Export data", importData: "Import data", importOk: "Data imported", importBad: "That text is not a TebaCalc backup.",
+      exportHint: "Copy this text and keep it. To restore, paste it in Import.", pasteHere: "Paste the backup here and tap Import.",
+      newMat: "New material", newPrinter: "New printer", noPrinter: "No printer",
+      quote: "Quote", qtyLabel: "Quantity", time: "Time", weight: "Material used", date: "Date"
+    }
+  };
+  var SYMBOLS = ["$", "€", "¢", "£", "₹", "¥", "₱"];
+
+  function uid() { return Math.random().toString(36).slice(2, 9); }
+  function num(v) { var n = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isFinite(n) ? n : 0; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  function defaults() {
+    var m1 = uid(), m2 = uid(), p1 = uid();
+    return {
+      example: true,
+      settings: { sym: "$", dec: 2, lang: "es", kwh: 8, rate: 400, fail: 10, profit: 50, fee: 0, tax: 22 },
+      materials: [
+        { id: m1, name: "PLA Básico", type: "PLA", color: "#1b1b1b", price: 900, weight: 1000 },
+        { id: m2, name: "PETG", type: "PETG", color: "#f2f2f2", price: 1100, weight: 1000 }
+      ],
+      printers: [{ id: p1, name: "Bambu Lab A1", watts: 100, price: 30000, life: 5000, maint: 1 }],
+      history: [],
+      job: null
+    };
+  }
+  function newJob(st) {
+    var s = st.settings, m = st.materials[0];
+    return {
+      id: null, name: "", client: "", qty: 1,
+      fil: [m ? { mat: m.id, price: m.price, weight: m.weight, color: m.color, g: 120 } : { mat: "", price: 0, weight: 1000, color: "#1fd16b", g: 0 }],
+      printer: st.printers[0] ? st.printers[0].id : "", h: 5, m: 0, fail: s.fail, kwh: s.kwh,
+      prep: 10, post: 10, rate: s.rate, supplies: 0, pack: 30, ship: 0,
+      profit: s.profit, fee: s.fee, tax: s.tax
+    };
+  }
+
+  var state;
+  try { state = JSON.parse(localStorage.getItem(KEY)); } catch (e) { state = null; }
+  if (!state || !state.settings) state = defaults();
+  if (!state.job) state.job = newJob(state);
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  var view = "calc";
+  function t(k) { return (I18N[state.settings.lang] || I18N.es)[k] || k; }
+  function money(n) {
+    var d = Math.max(0, Math.min(4, num(state.settings.dec)));
+    var loc = state.settings.lang === "en" ? "en-US" : "es-UY";
+    return state.settings.sym + " " + (n || 0).toLocaleString(loc, { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function findPrinter(id) { for (var i = 0; i < state.printers.length; i++) if (state.printers[i].id === id) return state.printers[i]; return null; }
+  function findMat(id) { for (var i = 0; i < state.materials.length; i++) if (state.materials[i].id === id) return state.materials[i]; return null; }
+
+  // Cost model, agreed in the design doc.
+  function compute(j) {
+    var hours = num(j.h) + num(j.m) / 60;
+    var material = 0, grams = 0;
+    j.fil.forEach(function (f) { var w = num(f.weight); grams += num(f.g); if (w > 0) material += num(f.g) * num(f.price) / w; });
+    var p = findPrinter(j.printer);
+    var energy = p ? hours * num(p.watts) / 1000 * num(j.kwh) : 0;
+    var wear = p ? hours * ((num(p.life) > 0 ? num(p.price) / num(p.life) : 0) + num(p.maint)) : 0;
+    var machineBase = material + energy + wear;
+    var failCost = machineBase * num(j.fail) / 100;
+    var labor = (num(j.prep) + num(j.post)) / 60 * num(j.rate);
+    var cost = machineBase + failCost + labor + num(j.supplies) + num(j.pack);
+    var profitAmt = cost * num(j.profit) / 100;
+    var net = cost + profitAmt;
+    var feeRate = Math.min(num(j.fee), 95) / 100;
+    var withFee = net / (1 - feeRate);
+    var feeAmt = withFee - net;
+    var taxAmt = withFee * num(j.tax) / 100;
+    var total = withFee + taxAmt + num(j.ship);
+    var qty = Math.max(1, Math.round(num(j.qty)) || 1);
+    return { hours: hours, grams: grams, material: material, energy: energy, wear: wear, failCost: failCost, labor: labor,
+      supplies: num(j.supplies), pack: num(j.pack), cost: cost, profitAmt: profitAmt, net: net, feeAmt: feeAmt, taxAmt: taxAmt,
+      ship: num(j.ship), total: total, qty: qty, unit: total / qty };
+  }
+
+  // ---------- rendering helpers ----------
+  function field(label, key, opts) {
+    opts = opts || {};
+    var v = opts.value != null ? opts.value : state.job[key];
+    var input = '<input id="' + (opts.id || "j-" + key) + '" data-k="' + key + '"' + (opts.data || "") + ' type="' + (opts.type || "number") + '" inputmode="' + (opts.type === "text" ? "text" : "decimal") + '" value="' + esc(v) + '"' + (opts.ph ? ' placeholder="' + esc(opts.ph) + '"' : "") + ' step="any" min="0">';
+    if (opts.unit) input = '<div class="unit">' + input + "<em>" + esc(opts.unit) + "</em></div>";
+    return '<label class="f"><span>' + esc(label) + "</span>" + input + "</label>";
+  }
+
+  function renderCalc() {
+    var j = state.job, s = state.settings;
+    var matOpts = function (sel) {
+      return '<option value="">' + esc(t("manual")) + "</option>" + state.materials.map(function (m) {
+        return '<option value="' + m.id + '"' + (m.id === sel ? " selected" : "") + ">" + esc(m.name) + "</option>";
+      }).join("");
+    };
+    var fils = j.fil.map(function (f, i) {
+      var manual = !f.mat;
+      return '<div class="fil" data-i="' + i + '">' +
+        '<div class="fil-head"><span class="dot" style="background:' + esc(f.color) + '"></span>' +
+        '<select id="fil-mat-' + i + '" data-f="mat" aria-label="' + esc(t("material")) + '">' + matOpts(f.mat) + "</select>" +
+        (j.fil.length > 1 ? '<button class="icon" type="button" data-act="rmfil" aria-label="' + esc(t("remove")) + '">✕</button>' : "") + "</div>" +
+        (manual ? '<div class="grid3">' +
+          '<label class="f"><span>' + esc(t("spoolPrice")) + '</span><input id="fil-price-' + i + '" data-f="price" type="number" inputmode="decimal" step="any" min="0" value="' + esc(f.price) + '"></label>' +
+          '<label class="f"><span>' + esc(t("spoolWeight")) + '</span><div class="unit"><input id="fil-weight-' + i + '" data-f="weight" type="number" inputmode="decimal" step="any" min="0" value="' + esc(f.weight) + '"><em>g</em></div></label>' +
+          '<label class="f"><span>' + esc(t("color")) + '</span><input id="fil-color-' + i + '" data-f="color" type="color" value="' + esc(f.color) + '"></label></div>' : "") +
+        '<label class="f"><span>' + esc(t("grams")) + '</span><div class="unit"><input id="fil-g-' + i + '" data-f="g" type="number" inputmode="decimal" step="any" min="0" value="' + esc(f.g) + '"><em>g</em></div></label>' +
+        "</div>";
+    }).join("");
+    var printerOpts = '<option value="">' + esc(t("noPrinter")) + "</option>" + state.printers.map(function (p) {
+      return '<option value="' + p.id + '"' + (p.id === j.printer ? " selected" : "") + ">" + esc(p.name) + " · " + esc(p.watts) + " W</option>";
+    }).join("");
+
+    return (state.example ? '<p class="example-note">' + esc(t("example")) + "</p>" : "") +
+      '<section class="view">' +
+      '<div class="block"><h2>' + esc(t("piece")) + '</h2><div class="card">' +
+        field(t("jobName"), "name", { type: "text", ph: t("jobPh") }) +
+        '<div class="grid2">' + field(t("client"), "client", { type: "text" }) + field(t("qty"), "qty", { unit: "u" }) + "</div>" +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("filaments")) + '</h2><div class="card">' + fils +
+        '<button class="ghost" type="button" data-act="addfil">' + esc(t("addColor")) + "</button></div></div>" +
+      '<div class="block"><h2>' + esc(t("printing")) + '</h2><div class="card">' +
+        '<label class="f"><span>' + esc(t("printer")) + '</span><select id="j-printer" data-k="printer">' + printerOpts + "</select></label>" +
+        '<div class="grid2">' + field(t("hours"), "h", { unit: "h" }) + field(t("minutes"), "m", { unit: t("min") }) + "</div>" +
+        '<div class="grid2">' + field(t("fail"), "fail", { unit: "%" }) + field(t("kwh"), "kwh", { unit: s.sym }) + "</div>" +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("work")) + '</h2><div class="card">' +
+        '<div class="grid3">' + field(t("prep"), "prep", { unit: t("min") }) + field(t("post"), "post", { unit: t("min") }) + field(t("rate"), "rate", { unit: s.sym + "/h" }) + "</div>" +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("extras")) + '</h2><div class="card">' +
+        '<div class="grid3">' + field(t("supplies"), "supplies", { unit: s.sym }) + field(t("pack"), "pack", { unit: s.sym }) + field(t("ship"), "ship", { unit: s.sym }) + "</div>" +
+        '<p class="hint">' + esc(t("suppliesHint")) + "</p>" +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("sale")) + '</h2><div class="card">' +
+        '<div class="grid3">' + field(t("profit"), "profit", { unit: "%" }) + field(t("fee"), "fee", { unit: "%" }) + field(t("tax"), "tax", { unit: "%" }) + "</div>" +
+        '<p class="hint">' + esc(t("profitHint")) + "</p>" +
+      "</div></div>" +
+      '<p class="ver">TebaCalc v' + VERSION + "</p></section>";
+  }
+
+  function renderHistory() {
+    var q = (document.getElementById("h-search") || {}).value || "";
+    var list = state.history.filter(function (h) {
+      var s = (h.job.name + " " + h.job.client).toLowerCase();
+      return s.indexOf(q.toLowerCase()) !== -1;
+    });
+    var loc = state.settings.lang === "en" ? "en-US" : "es-UY";
+    var items = list.map(function (h) {
+      var r = compute(h.job);
+      return '<div class="item" data-id="' + h.id + '"><div class="t"><b>' + esc(h.job.name || t("untitled")) + "</b><span>" + esc(money(r.total)) + "</span></div>" +
+        '<div class="s">' + esc(new Date(h.at).toLocaleDateString(loc)) + (h.job.client ? " · " + esc(h.job.client) : "") +
+        " · " + r.qty + " u · " + Math.round(r.grams) + " g · " + fmtTime(r.hours) + "</div>" +
+        '<div class="a"><button type="button" data-act="open">' + esc(t("open")) + '</button><button type="button" class="danger" data-act="del">' + esc(t("del")) + "</button></div></div>";
+    }).join("");
+    return '<section class="view"><div class="block"><h2>' + esc(t("history")) + "</h2>" +
+      '<input id="h-search" type="search" placeholder="' + esc(t("search")) + '" value="' + esc(q) + '">' +
+      '<div class="list" id="h-list">' + (items || '<p class="empty">' + esc(t("noHistory")) + "</p>") + "</div></div></section>";
+  }
+
+  function renderSettings() {
+    var s = state.settings;
+    var mats = state.materials.map(function (m, i) {
+      return '<div class="fil" data-coll="materials" data-i="' + i + '"><div class="fil-head"><span class="dot" style="background:' + esc(m.color) + '"></span>' +
+        '<input id="m-name-' + i + '" data-s="name" type="text" value="' + esc(m.name) + '" aria-label="' + esc(t("name")) + '">' +
+        '<button type="button" class="icon" data-act="rm" aria-label="' + esc(t("del")) + '">✕</button></div>' +
+        '<div class="grid2"><label class="f"><span>' + esc(t("type")) + '</span><input id="m-type-' + i + '" data-s="type" type="text" value="' + esc(m.type) + '"></label>' +
+        '<label class="f"><span>' + esc(t("color")) + '</span><input id="m-color-' + i + '" data-s="color" type="color" value="' + esc(m.color) + '"></label></div>' +
+        '<div class="grid2"><label class="f"><span>' + esc(t("spoolPrice")) + '</span><div class="unit"><input id="m-price-' + i + '" data-s="price" type="number" inputmode="decimal" step="any" min="0" value="' + esc(m.price) + '"><em>' + esc(s.sym) + "</em></div></label>" +
+        '<label class="f"><span>' + esc(t("spoolWeight")) + '</span><div class="unit"><input id="m-weight-' + i + '" data-s="weight" type="number" inputmode="decimal" step="any" min="0" value="' + esc(m.weight) + '"><em>g</em></div></label></div></div>';
+    }).join("");
+    var prs = state.printers.map(function (p, i) {
+      return '<div class="fil" data-coll="printers" data-i="' + i + '"><div class="fil-head">' +
+        '<input id="p-name-' + i + '" data-s="name" type="text" value="' + esc(p.name) + '" aria-label="' + esc(t("name")) + '">' +
+        '<button type="button" class="icon" data-act="rm" aria-label="' + esc(t("del")) + '">✕</button></div>' +
+        '<div class="grid2"><label class="f"><span>' + esc(t("watts")) + '</span><div class="unit"><input id="p-watts-' + i + '" data-s="watts" type="number" inputmode="decimal" step="any" min="0" value="' + esc(p.watts) + '"><em>W</em></div></label>' +
+        '<label class="f"><span>' + esc(t("printerPrice")) + '</span><div class="unit"><input id="p-price-' + i + '" data-s="price" type="number" inputmode="decimal" step="any" min="0" value="' + esc(p.price) + '"><em>' + esc(s.sym) + "</em></div></label></div>" +
+        '<div class="grid2"><label class="f"><span>' + esc(t("life")) + '</span><div class="unit"><input id="p-life-' + i + '" data-s="life" type="number" inputmode="decimal" step="any" min="0" value="' + esc(p.life) + '"><em>h</em></div></label>' +
+        '<label class="f"><span>' + esc(t("maint")) + '</span><div class="unit"><input id="p-maint-' + i + '" data-s="maint" type="number" inputmode="decimal" step="any" min="0" value="' + esc(p.maint) + '"><em>' + esc(s.sym) + "</em></div></label></div></div>";
+    }).join("");
+    var custom = SYMBOLS.indexOf(s.sym) === -1;
+    var syms = SYMBOLS.map(function (c) { return '<button type="button" data-sym="' + c + '" aria-pressed="' + (c === s.sym) + '">' + c + "</button>"; }).join("");
+    var sf = function (label, key, unit) {
+      return '<label class="f"><span>' + esc(label) + '</span><div class="unit"><input id="s-' + key + '" data-set="' + key + '" type="number" inputmode="decimal" step="any" min="0" value="' + esc(s[key]) + '"><em>' + esc(unit) + "</em></div></label>";
+    };
+    return '<section class="view">' +
+      '<div class="block"><h2>' + esc(t("general")) + '</h2><div class="card">' +
+        '<div class="f"><span class="hint">' + esc(t("symbol")) + '</span><div class="syms">' + syms + "</div></div>" +
+        '<div class="grid2"><label class="f"><span>' + esc(t("custom")) + '</span><input id="s-symc" type="text" maxlength="4" value="' + (custom ? esc(s.sym) : "") + '" placeholder="R$, Bs, S/…"></label>' +
+        '<label class="f"><span>' + esc(t("decimals")) + '</span><select id="s-dec">' + [0, 1, 2].map(function (d) { return '<option value="' + d + '"' + (num(s.dec) === d ? " selected" : "") + ">" + d + "</option>"; }).join("") + "</select></label></div>" +
+        '<label class="f"><span>' + esc(t("language")) + '</span><select id="s-lang"><option value="es"' + (s.lang === "es" ? " selected" : "") + '>Español</option><option value="en"' + (s.lang === "en" ? " selected" : "") + ">English</option></select></label>" +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("defaults")) + '</h2><div class="card">' +
+        '<div class="grid2">' + sf(t("kwh"), "kwh", s.sym) + sf(t("rate"), "rate", s.sym + "/h") + "</div>" +
+        '<div class="grid2">' + sf(t("fail"), "fail", "%") + sf(t("profit"), "profit", "%") + "</div>" +
+        '<div class="grid2">' + sf(t("fee"), "fee", "%") + sf(t("tax"), "tax", "%") + "</div>" +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("myMaterials")) + '</h2><div class="card">' + mats +
+        '<button class="ghost" type="button" data-act="addmat">+ ' + esc(t("newMat")) + "</button></div></div>" +
+      '<div class="block"><h2>' + esc(t("myPrinters")) + '</h2><div class="card">' + prs +
+        '<button class="ghost" type="button" data-act="addprinter">+ ' + esc(t("newPrinter")) + "</button></div></div>" +
+      '<div class="block"><h2>' + esc(t("backup")) + '</h2><div class="card"><div class="actions">' +
+        '<button type="button" data-act="export">' + esc(t("exportData")) + '</button><button type="button" data-act="import">' + esc(t("importData")) + "</button></div></div></div>" +
+      '<p class="ver">TebaCalc v' + VERSION + "</p></section>";
+  }
+
+  function fmtTime(h) { var hh = Math.floor(h), mm = Math.round((h - hh) * 60); if (mm === 60) { hh++; mm = 0; } return hh + " h " + mm + " min"; }
+
+  var main = document.getElementById("main");
+  function render() {
+    document.documentElement.lang = state.settings.lang;
+    document.getElementById("tagline").textContent = t("tagline");
+    main.innerHTML = view === "calc" ? renderCalc() : view === "history" ? renderHistory() : renderSettings();
+    renderTabs();
+    updatePrice();
+  }
+  var ICONS = {
+    calc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0"/></svg>',
+    history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>'
+  };
+  function renderTabs() {
+    document.getElementById("tabs").innerHTML = ["calc", "history", "settings"].map(function (v) {
+      return '<button type="button" data-view="' + v + '" aria-current="' + (v === view) + '">' + ICONS[v] + "<span>" + esc(t(v)) + "</span></button>";
+    }).join("");
+    document.getElementById("pricebar").hidden = view !== "calc";
+  }
+  function updatePrice() {
+    var r = compute(state.job);
+    document.getElementById("pb-lbl").textContent = t("finalPrice");
+    document.getElementById("pb-total").textContent = money(r.total);
+    document.getElementById("pb-unit").textContent = r.qty > 1 ? money(r.unit) + " " + t("perUnit") : "";
+    document.getElementById("pb-btn").textContent = t("breakdown");
+  }
+
+  // ---------- breakdown sheet ----------
+  var overlay = document.getElementById("overlay");
+  function closeSheet() { overlay.innerHTML = ""; }
+  function openSheet(html) {
+    overlay.innerHTML = '<div class="sheet-bg" data-act="close"><div class="sheet" role="dialog" aria-modal="true">' + html + "</div></div>";
+  }
+  var COLORS = { material: "#1fd16b", energy: "#f2c14e", wear: "#5aa9e6", failCost: "#e07a5f", labor: "#b48ef0", extras: "#8e9a92" };
+  function showBreakdown() {
+    var r = compute(state.job);
+    var parts = [["material", r.material], ["energy", r.energy], ["wear", r.wear], ["failCost", r.failCost], ["labor", r.labor], ["extras", r.supplies + r.pack]];
+    var bar = parts.map(function (p) { return r.cost > 0 && p[1] > 0 ? '<span style="width:' + (p[1] / r.cost * 100) + "%;background:" + COLORS[p[0]] + '"></span>' : ""; }).join("");
+    var label = function (k) { return k === "extras" ? t("supplies") + " + " + t("pack") : t(k === "material" ? "matCost" : k); };
+    var legend = parts.map(function (p) { return p[1] > 0 ? '<span><i style="background:' + COLORS[p[0]] + '"></i>' + esc(label(p[0])) + "</span>" : ""; }).join("");
+    var row = function (l, v, d, cls) { return '<div class="row' + (cls ? " " + cls : "") + '"><span>' + esc(l) + (d ? '<span class="d">' + esc(d) + "</span>" : "") + "</span><span>" + esc(money(v)) + "</span></div>"; };
+    var j = state.job;
+    openSheet(
+      "<h3>" + esc(j.name || t("breakdown")) + "</h3>" +
+      '<div class="bar">' + bar + '</div><div class="legend">' + legend + "</div>" +
+      '<div class="rows">' +
+        row(t("matCost"), r.material, Math.round(r.grams) + " g") +
+        row(t("energy"), r.energy, fmtTime(r.hours)) +
+        row(t("wear"), r.wear) +
+        row(t("failCost"), r.failCost, num(j.fail) + "%") +
+        row(t("labor"), r.labor, (num(j.prep) + num(j.post)) + " " + t("min")) +
+        (r.supplies ? row(t("supplies"), r.supplies) : "") +
+        (r.pack ? row(t("pack"), r.pack) : "") +
+        row(t("cost"), r.cost, "", "sub") +
+        row(t("profitAmt"), r.profitAmt, num(j.profit) + "%") +
+        (r.feeAmt ? row(t("feeAmt"), r.feeAmt, num(j.fee) + "%") : "") +
+        row(t("net"), r.net + r.feeAmt, "", "sub") +
+        row(t("taxAmt"), r.taxAmt, num(j.tax) + "%") +
+        (r.ship ? row(t("ship"), r.ship) : "") +
+        row(t("finalPrice"), r.total, r.qty > 1 ? money(r.unit) + " " + t("perUnit") + " · " + r.qty + " u" : "", "total") +
+      "</div>" +
+      '<div class="actions"><button type="button" class="primary" data-act="save">' + esc(t("save")) + '</button>' +
+      '<button type="button" data-act="quote">' + esc(t("copyQuote")) + '</button>' +
+      '<button type="button" data-act="new">' + esc(t("newJob")) + '</button></div>' +
+      '<button type="button" data-act="close">' + esc(t("close")) + "</button>"
+    );
+  }
+  function quoteText() {
+    var j = state.job, r = compute(j), loc = state.settings.lang === "en" ? "en-US" : "es-UY";
+    return [
+      "TebaCalc — " + t("quote"),
+      t("date") + ": " + new Date().toLocaleDateString(loc),
+      j.name ? t("jobName") + ": " + j.name : "",
+      j.client ? t("client").replace(/ \(.*\)/, "") + ": " + j.client : "",
+      t("qtyLabel") + ": " + r.qty,
+      t("time") + ": " + fmtTime(r.hours),
+      t("weight") + ": " + Math.round(r.grams) + " g",
+      "",
+      t("net") + ": " + money(r.net + r.feeAmt),
+      t("taxAmt") + " (" + num(j.tax) + "%): " + money(r.taxAmt),
+      r.ship ? t("ship") + ": " + money(r.ship) : "",
+      t("finalPrice") + ": " + money(r.total),
+      r.qty > 1 ? "(" + money(r.unit) + " " + t("perUnit") + ")" : ""
+    ].filter(function (l, i, a) { return l !== "" || (a[i - 1] && a[i - 1] !== ""); }).join("\n");
+  }
+  function copyText(text, okMsg) {
+    var fallback = function () {
+      openSheet("<h3>" + esc(t("copyQuote")) + '</h3><p class="hint">' + esc(t("copyFallback")) + '</p><textarea class="copy" id="copybox" readonly>' + esc(text) + '</textarea><button type="button" data-act="close">' + esc(t("close")) + "</button>");
+      var b = document.getElementById("copybox"); b.focus(); b.select();
+    };
+    try {
+      navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, fallback);
+    } catch (e) { fallback(); }
+  }
+  var toastTimer;
+  function toast(msg) {
+    var el = document.getElementById("toast");
+    if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 2200);
+  }
+
+  // ---------- events ----------
+  function dropExample() { if (state.example) { state.example = false; } }
+
+  main.addEventListener("input", function (e) {
+    var el = e.target;
+    if (view === "calc") {
+      if (el.dataset.k) { state.job[el.dataset.k] = el.type === "text" || el.tagName === "SELECT" ? el.value : el.value; }
+      if (el.dataset.f) {
+        var i = +el.closest(".fil").dataset.i, f = state.job.fil[i];
+        f[el.dataset.f] = el.value;
+        if (el.dataset.f === "color") el.closest(".fil").querySelector(".dot").style.background = el.value;
+      }
+      persist(); updatePrice();
+    } else if (view === "history" && el.id === "h-search") {
+      var pos = el.selectionStart; render(); var s = document.getElementById("h-search"); s.focus(); try { s.setSelectionRange(pos, pos); } catch (x) {}
+    } else if (view === "settings") {
+      dropExample();
+      if (el.dataset.set) state.settings[el.dataset.set] = num(el.value);
+      if (el.dataset.s) {
+        var box = el.closest(".fil"), item = state[box.dataset.coll][+box.dataset.i];
+        item[el.dataset.s] = el.type === "text" || el.type === "color" ? el.value : num(el.value);
+        if (el.dataset.s === "color") box.querySelector(".dot").style.background = el.value;
+        syncJobMaterials();
+      }
+      if (el.id === "s-symc" && el.value.trim()) { state.settings.sym = el.value.trim(); markSyms(); }
+      persist();
+    }
+  });
+  main.addEventListener("change", function (e) {
+    var el = e.target;
+    if (view === "calc" && el.dataset.f === "mat") {
+      var i = +el.closest(".fil").dataset.i, f = state.job.fil[i], m = findMat(el.value);
+      f.mat = el.value;
+      if (m) { f.price = m.price; f.weight = m.weight; f.color = m.color; }
+      persist(); render();
+    } else if (view === "calc" && el.dataset.k === "printer") {
+      state.job.printer = el.value; persist(); updatePrice();
+    } else if (view === "settings") {
+      if (el.id === "s-dec") state.settings.dec = num(el.value);
+      if (el.id === "s-lang") state.settings.lang = el.value;
+      persist(); render();
+    }
+  });
+  function syncJobMaterials() {
+    state.job.fil.forEach(function (f) { var m = findMat(f.mat); if (m) { f.price = m.price; f.weight = m.weight; f.color = m.color; } });
+  }
+  function markSyms() {
+    main.querySelectorAll("[data-sym]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.sym === state.settings.sym)); });
+  }
+  var armed = null;
+  main.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    var act = b.dataset.act;
+    if (b.dataset.sym) { dropExample(); state.settings.sym = b.dataset.sym; var c = document.getElementById("s-symc"); if (c) c.value = ""; persist(); render(); return; }
+    if (act === "addfil") { var m = state.materials[0]; state.job.fil.push(m ? { mat: m.id, price: m.price, weight: m.weight, color: m.color, g: 0 } : { mat: "", price: 0, weight: 1000, color: "#ffffff", g: 0 }); persist(); render(); return; }
+    if (act === "rmfil") { state.job.fil.splice(+b.closest(".fil").dataset.i, 1); persist(); render(); return; }
+    if (act === "addmat") { dropExample(); state.materials.push({ id: uid(), name: t("newMat"), type: "PLA", color: "#ffffff", price: 0, weight: 1000 }); persist(); render(); return; }
+    if (act === "addprinter") { dropExample(); state.printers.push({ id: uid(), name: t("newPrinter"), watts: 120, price: 0, life: 5000, maint: 0 }); persist(); render(); return; }
+    if (act === "rm" || act === "del") {
+      if (armed !== b) { if (armed) { armed.classList.remove("armed"); armed.textContent = armed.dataset.label; } armed = b; b.dataset.label = b.textContent; b.textContent = t("sure"); b.classList.add("armed"); return; }
+      armed = null;
+      if (act === "rm") { var box = b.closest(".fil"); dropExample(); state[box.dataset.coll].splice(+box.dataset.i, 1); }
+      else { var id = b.closest(".item").dataset.id; state.history = state.history.filter(function (h) { return h.id !== id; }); }
+      persist(); render(); return;
+    }
+    if (act === "open") {
+      var hid = b.closest(".item").dataset.id;
+      state.history.forEach(function (h) { if (h.id === hid) state.job = JSON.parse(JSON.stringify(h.job)); });
+      view = "calc"; persist(); render(); window.scrollTo(0, 0); return;
+    }
+    if (act === "export") {
+      var data = JSON.stringify({ app: "tebacalc", v: VERSION, settings: state.settings, materials: state.materials, printers: state.printers, history: state.history });
+      openSheet("<h3>" + esc(t("exportData")) + '</h3><p class="hint">' + esc(t("exportHint")) + '</p><textarea class="copy" id="copybox" readonly>' + esc(data) + '</textarea><div class="actions"><button type="button" class="primary" data-act="copyexport">' + esc(t("copyQuote").split(" ")[0]) + '</button><button type="button" data-act="close">' + esc(t("close")) + "</button></div>");
+      return;
+    }
+    if (act === "import") {
+      openSheet("<h3>" + esc(t("importData")) + '</h3><p class="hint">' + esc(t("pasteHere")) + '</p><textarea class="copy" id="importbox"></textarea><div class="actions"><button type="button" class="primary" data-act="doimport">' + esc(t("importData")) + '</button><button type="button" data-act="close">' + esc(t("close")) + "</button></div>");
+      return;
+    }
+  });
+  document.addEventListener("click", function (e) {
+    if (armed && !e.target.closest("button")) { armed.classList.remove("armed"); armed.textContent = armed.dataset.label; armed = null; }
+  });
+
+  overlay.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-act]"); if (!el) return;
+    var act = el.dataset.act;
+    if (act === "close" && (el.tagName === "BUTTON" || e.target === el)) { closeSheet(); return; }
+    if (act === "save") {
+      var j = JSON.parse(JSON.stringify(state.job));
+      if (!j.id) { j.id = uid(); state.job.id = j.id; }
+      state.history = state.history.filter(function (h) { return h.id !== j.id; });
+      state.history.unshift({ id: j.id, at: Date.now(), job: j });
+      persist(); closeSheet(); toast(t("saved")); return;
+    }
+    if (act === "quote") { copyText(quoteText(), t("copied")); return; }
+    if (act === "new") { var keep = state.job.printer; state.job = newJob(state); if (findPrinter(keep)) state.job.printer = keep; persist(); closeSheet(); render(); window.scrollTo(0, 0); return; }
+    if (act === "copyexport") { copyText(document.getElementById("copybox").value, t("copied")); return; }
+    if (act === "doimport") {
+      try {
+        var d = JSON.parse(document.getElementById("importbox").value);
+        if (!d || d.app !== "tebacalc") throw 0;
+        state.settings = d.settings; state.materials = d.materials || []; state.printers = d.printers || []; state.history = d.history || [];
+        state.example = false; state.job = newJob(state); persist(); closeSheet(); render(); toast(t("importOk"));
+      } catch (x) { toast(t("importBad")); }
+    }
+  });
+  document.getElementById("pb-btn").addEventListener("click", showBreakdown);
+  document.getElementById("tabs").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-view]"); if (!b) return;
+    view = b.dataset.view; render(); window.scrollTo(0, 0);
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+
+  render();
+})();
+</script>
