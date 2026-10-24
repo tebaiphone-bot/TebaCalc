@@ -1,0 +1,1124 @@
+<title>TebaCalc 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-column phone app; order blocks stacked (client, prints, files, costs), live price bar pinned at the bottom, four-tab bar under it. */
+:root {
+  --bg: #0f1311;
+  --surface: #181d1a;
+  --field: #222924;
+  --line: #2c352f;
+  --fg: #e8eee9;
+  --muted: #8e9a92;
+  --accent: #1fd16b;
+  --accent-ink: #04140a;
+  --danger: #ff6b5e;
+  --f-display: "Chakra Petch", "Rajdhani", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 190px;
+}
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.brand { font-family: var(--f-display); font-size: 28px; letter-spacing: .04em; font-weight: 500; margin: 0; line-height: 1; }
+.brand b { color: var(--accent); font-weight: 700; }
+.brand small { display: block; font-family: var(--f-body); font-size: 11px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; margin-top: 6px; }
+.example-note { font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 16px; }
+
+section.view { display: grid; gap: 22px; }
+.block { display: grid; gap: 10px; }
+.block > h2 {
+  margin: 0; font-family: var(--f-display); font-size: 14px; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--accent);
+}
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 360px) { .grid3 { grid-template-columns: 1fr 1fr; } }
+label.f { display: grid; gap: 5px; min-width: 0; }
+label.f > span { font-size: 12.5px; color: var(--muted); }
+input, select {
+  width: 100%; min-width: 0; font: inherit; color: var(--fg); background: var(--field); border: 1px solid transparent;
+  border-radius: 10px; padding: 11px 12px; outline: none;
+}
+input[type=number], .num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+input:focus-visible, select:focus-visible, button:focus-visible { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 1px; }
+input[type=color] { padding: 3px; height: 44px; }
+.unit { position: relative; }
+.unit input { padding-right: 46px; }
+.unit em { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 12px; color: var(--muted); pointer-events: none; }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+
+button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; color: var(--fg); background: var(--field); padding: 10px 14px; }
+button.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.ghost { background: transparent; border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); width: 100%; padding: 12px; font-weight: 600; }
+button.icon { background: transparent; color: var(--muted); padding: 6px 8px; font-size: 18px; line-height: 1; }
+button.danger { color: var(--danger); background: transparent; }
+button.danger.armed { background: var(--danger); color: #1a0402; }
+
+.fil { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.fil-head { display: flex; align-items: center; gap: 10px; }
+.dot { width: 16px; height: 16px; border-radius: 50%; flex: none; border: 2px solid var(--line); }
+.fil-head select { flex: 1; }
+
+/* Price bar */
+.pricebar {
+  position: fixed; left: 0; right: 0; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); z-index: 5;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+.pricebar .inner {
+  max-width: 560px; margin: 0 auto; background: var(--accent); color: var(--accent-ink); border-radius: 16px;
+  padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.pricebar .lbl { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; opacity: .75; }
+.pricebar .big { font-family: var(--f-num); font-size: 24px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.pricebar .unitp { font-size: 12px; opacity: .8; font-family: var(--f-num); }
+.pricebar button { background: var(--accent-ink); color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+}
+nav.tabs .inner { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); }
+nav.tabs button { background: transparent; border-radius: 0; padding: 10px 4px 12px; color: var(--muted); font-size: 12.5px; display: grid; justify-items: center; gap: 3px; height: 58px; }
+nav.tabs button svg { width: 22px; height: 22px; }
+nav.tabs button[aria-current=true] { color: var(--accent); }
+
+/* Breakdown sheet */
+.sheet-bg { position: fixed; inset: 0; background: rgb(0 0 0 / .6); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  background: var(--surface); border-radius: 18px 18px 0 0; width: 100%; max-width: 560px; max-height: 88%; overflow: auto;
+  padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  display: grid; gap: 14px; border: 1px solid var(--line);
+}
+.sheet h3 { margin: 0; font-family: var(--f-display); font-size: 20px; }
+.rows { display: grid; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.row > span:last-child { font-family: var(--f-num); font-variant-numeric: tabular-nums; text-align: right; }
+.row.sub { font-weight: 600; }
+.row.total { border-bottom: 0; font-size: 18px; color: var(--accent); font-weight: 600; padding-top: 10px; }
+.row .d { color: var(--muted); font-size: 12px; display: block; font-family: var(--f-body); }
+.bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--field); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions button { flex: 1 1 120px; }
+
+/* Lists */
+.list { display: grid; gap: 8px; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 4px; }
+.item .t { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.item .t b { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.item .t span { font-family: var(--f-num); color: var(--accent); white-space: nowrap; }
+.item .s { font-size: 12.5px; color: var(--muted); }
+.item .a { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+.item .a button { padding: 6px 10px; font-size: 13px; }
+.empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px 8px; border: 1px dashed var(--line); border-radius: 12px; }
+.syms { display: flex; flex-wrap: wrap; gap: 8px; }
+.syms button { min-width: 44px; font-family: var(--f-num); font-size: 17px; }
+.syms button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; z-index: 30; font-size: 14px; max-width: 90%; }
+textarea.copy { width: 100%; min-height: 160px; font: 13px var(--f-num); background: var(--field); color: var(--fg); border: 0; border-radius: 10px; padding: 10px; }
+.ver { text-align: center; color: var(--muted); font-size: 12px; }
+@media (prefers-reduced-motion: no-preference) { .sheet { animation: up .18s ease-out; } @keyframes up { from { transform: translateY(24px); opacity: .6; } } }
+</style>
+<style>
+[hidden] { display: none !important; }
+nav.tabs .inner { grid-template-columns: repeat(4, 1fr); }
+.print { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.print-head { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; border-radius: 0; padding: 12px; }
+.print-head .pn { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.print-head .pn b { font-weight: 600; overflow-wrap: anywhere; }
+.print-head .pn small { color: var(--muted); font-size: 12.5px; }
+.print-head .pc { font-family: var(--f-num); color: var(--accent); white-space: nowrap; font-size: 14px; }
+.print-head .chev { color: var(--muted); transition: transform .15s; }
+.print[data-open="true"] .print-head .chev { transform: rotate(90deg); }
+.print-body { display: grid; gap: 12px; padding: 0 12px 12px; }
+.print-foot { display: flex; gap: 8px; justify-content: flex-end; }
+.print-foot button { padding: 7px 12px; font-size: 13px; }
+.row-btn { display: flex; gap: 8px; align-items: end; }
+.row-btn label.f { flex: 1; }
+.row-btn button { height: 46px; white-space: nowrap; }
+.files { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.file { position: relative; aspect-ratio: 1; max-width: 100%; border-radius: 10px; overflow: hidden; background: var(--field); border: 1px solid var(--line); display: grid; place-items: center; }
+.file img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.file .doc { padding: 8px; font-size: 11.5px; color: var(--muted); text-align: center; overflow-wrap: anywhere; display: grid; gap: 4px; }
+.file .doc b { font-family: var(--f-display); color: var(--fg); font-size: 15px; }
+.file button { position: absolute; top: 4px; right: 4px; padding: 2px 7px; font-size: 13px; border-radius: 8px; background: rgb(0 0 0 / .65); color: #fff; }
+.file button.armed { background: var(--danger); color: #1a0402; }
+.file-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.file-add label { flex: 1 1 140px; cursor: pointer; text-align: center; border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); border-radius: 10px; padding: 11px; font-weight: 600; }
+.file-add input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.wa { background: #25d366; color: #052e14; font-weight: 600; text-align: center; text-decoration: none; border-radius: 10px; padding: 11px 14px; display: block; }
+.check { display: flex; gap: 10px; align-items: center; padding: 6px 0; }
+.check input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+textarea.msg { width: 100%; min-height: 170px; font: 14px/1.45 var(--f-body); background: var(--field); color: var(--fg); border: 0; border-radius: 10px; padding: 10px; resize: vertical; }
+.thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.thumbs label { display: flex; align-items: center; gap: 6px; background: var(--field); border-radius: 8px; padding: 4px 8px 4px 4px; font-size: 12.5px; max-width: 100%; }
+.thumbs img { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; }
+.thumbs input { accent-color: var(--accent); }
+.pill { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--field); color: var(--muted); }
+.sheet form { display: grid; gap: 12px; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">TEBA<b>CALC</b><small id="tagline"></small></h1>
+  </header>
+  <main id="main"></main>
+</div>
+<div class="pricebar" id="pricebar"><div class="inner">
+  <div><div class="lbl" id="pb-lbl"></div><div class="big" id="pb-total">0</div><div class="unitp" id="pb-unit"></div></div>
+  <button id="pb-btn" type="button"></button>
+</div></div>
+<nav class="tabs"><div class="inner" id="tabs"></div></nav>
+<div id="overlay"></div>
+<input type="file" id="import-file" accept=".json,application/json" hidden>
+
+<script>
+(function () {
+  "use strict";
+  var LEGACY_KEY = "tebacalc2";
+  var VERSION = "2.1";
+
+  var I18N = {
+    es: {
+      tagline: "Costos de impresión 3D", calc: "Pedido", clients: "Clientes", history: "Historial", settings: "Ajustes",
+      example: "Valores de ejemplo cargados. Cambialos en Ajustes por tus materiales, tu impresora y tus precios.",
+      order: "Pedido", orderName: "Nombre del pedido", orderPh: "Ej: Pedido de Daniel", client: "Cliente", noClient: "— Sin cliente —", newClient: "+ Cliente",
+      prints: "Impresiones", printName: "Qué se imprime", printPh: "Ej: Soporte PS5", perBed: "Piezas por cama", beds: "Camas", pieces: "piezas", piece: "pieza",
+      addPrint: "+ Agregar impresión", duplicate: "Duplicar", remove: "Quitar", printN: "Impresión",
+      filaments: "Filamentos", material: "Material", manual: "— Manual —", spoolPrice: "Precio del rollo", spoolWeight: "Peso del rollo", gramsBed: "Gramos por cama", color: "Color",
+      addColor: "+ Agregar otro color",
+      printer: "Impresora", hoursBed: "Horas por cama", minutes: "Minutos", fail: "Fallo",
+      prep: "Preparación", post: "Post-procesado", min: "min", workHint: "Minutos de trabajo totales de esta impresión.",
+      work: "Trabajo y luz", rate: "Tarifa por hora", kwh: "Luz por kWh",
+      files: "Fotos y archivos", gallery: "Galería o archivos", camera: "Cámara", noFiles: "Fotos del trabajo, referencias o PDF. Quedan guardados en el pedido.",
+      extras: "Extras", supplies: "Insumos", suppliesHint: "Pintura, insertos, imanes, tornillos.", pack: "Empaque", ship: "Envío",
+      sale: "Venta", profit: "Ganancia", fee: "Comisión plataforma", tax: "Impuesto",
+      profitHint: "0% = precio de costo. 100% = el doble del costo.",
+      finalPrice: "Precio final", breakdown: "Desglose", each: "c/u",
+      matCost: "Material", energy: "Luz", wear: "Desgaste impresora", failCost: "Margen por fallos", labor: "Mano de obra",
+      cost: "Costo total", profitAmt: "Ganancia", net: "Precio sin impuesto", feeAmt: "Comisión", taxAmt: "Impuesto", subtotal: "Subtotal", total: "Total",
+      save: "Guardar", saved: "Pedido guardado", newOrder: "Nuevo pedido", close: "Cerrar", sendClient: "Enviar al cliente",
+      send: "Enviar por WhatsApp", sendTitle: "Enviar cotización", msg: "Mensaje", attach: "Adjuntar", quoteImg: "Cotización como imagen",
+      openWa: "Abrir chat de WhatsApp", shareWa: "Compartir (elegís WhatsApp y el contacto)", copyText: "Copiar texto", copied: "Texto copiado",
+      waNoPhone: "El cliente no tiene teléfono: WhatsApp te va a pedir elegir el contacto.",
+      shareOnlyApp: "Enviar archivos funciona en la app instalada.", copyFallback: "Seleccioná el texto y copialo:",
+      hello: "Hola", quoteIntro: "te paso la cotización", thanks: "¡Gracias!",
+      noHistory: "Todavía no guardaste pedidos. Armá uno y tocá Guardar en el desglose.", search: "Buscar por pedido o cliente",
+      open: "Abrir", del: "Eliminar", sure: "¿Seguro?", untitled: "Sin nombre", edit: "Editar",
+      noClients: "Todavía no hay clientes. Agregá el primero con el botón de arriba.", searchClients: "Buscar cliente",
+      clientName: "Nombre", phone: "Teléfono / WhatsApp", address: "Dirección", email: "Email", notes: "Notas", notesPh: "Ej: prefiere retirar en local",
+      ordersN: "pedidos", boughtTotal: "Total comprado", clientOrders: "Pedidos de este cliente", chat: "WhatsApp", nameRequired: "Poné al menos el nombre.",
+      myMaterials: "Mis materiales", myPrinters: "Mis impresoras", defaults: "Valores por defecto", general: "General", business: "Mi negocio",
+      businessName: "Nombre del negocio", businessHint: "Aparece en la cotización que recibe el cliente.", taxName: "Nombre del impuesto", cc: "Código de país",
+      ccHint: "Para WhatsApp: 598 es Uruguay. Los teléfonos que empiezan con 0 lo usan.",
+      name: "Nombre", type: "Tipo", watts: "Consumo", printerPrice: "Precio de compra", life: "Vida útil", maint: "Mantenimiento por hora",
+      symbol: "Símbolo de moneda", custom: "Otro", decimals: "Decimales", language: "Idioma",
+      backup: "Respaldo", exportData: "Exportar todo", importData: "Importar", backupHint: "Exportar arma un archivo con clientes, pedidos, fotos y ajustes. Guardalo en Drive o donde quieras. Importar lo carga en este u otro celular.",
+      exported: "Respaldo listo", importOk: "Datos importados", importBad: "Ese archivo no es un respaldo de TebaCalc.",
+      importConfirm: "Importar reemplaza todo lo que hay en este celular por el contenido del respaldo.", importDo: "Reemplazar y cargar",
+      newMat: "Nuevo material", newPrinter: "Nuevo printer", noPrinter: "Sin impresora", working: "Preparando…",
+      date: "Fecha", quote: "Cotización", fileTooBig: "Ese archivo pesa más de 20 MB y no se guardó."
+    },
+    en: {
+      tagline: "3D printing costs", calc: "Order", clients: "Clients", history: "History", settings: "Settings",
+      example: "Example values loaded. Replace them in Settings with your materials, printer and prices.",
+      order: "Order", orderName: "Order name", orderPh: "E.g. Daniel's order", client: "Client", noClient: "— No client —", newClient: "+ Client",
+      prints: "Prints", printName: "What is printed", printPh: "E.g. PS5 stand", perBed: "Parts per plate", beds: "Plates", pieces: "parts", piece: "part",
+      addPrint: "+ Add print", duplicate: "Duplicate", remove: "Remove", printN: "Print",
+      filaments: "Filaments", material: "Material", manual: "— Manual —", spoolPrice: "Spool price", spoolWeight: "Spool weight", gramsBed: "Grams per plate", color: "Color",
+      addColor: "+ Add another color",
+      printer: "Printer", hoursBed: "Hours per plate", minutes: "Minutes", fail: "Failure",
+      prep: "Preparation", post: "Post-processing", min: "min", workHint: "Total work minutes for this print.",
+      work: "Labor and power", rate: "Hourly rate", kwh: "Power per kWh",
+      files: "Photos and files", gallery: "Gallery or files", camera: "Camera", noFiles: "Photos of the work, references or PDFs. They stay saved with the order.",
+      extras: "Extras", supplies: "Supplies", suppliesHint: "Paint, inserts, magnets, screws.", pack: "Packaging", ship: "Shipping",
+      sale: "Sale", profit: "Profit", fee: "Platform fee", tax: "Tax",
+      profitHint: "0% = cost price. 100% = double the cost.",
+      finalPrice: "Final price", breakdown: "Breakdown", each: "each",
+      matCost: "Material", energy: "Power", wear: "Printer wear", failCost: "Failure allowance", labor: "Labor",
+      cost: "Total cost", profitAmt: "Profit", net: "Price before tax", feeAmt: "Fee", taxAmt: "Tax", subtotal: "Subtotal", total: "Total",
+      save: "Save", saved: "Order saved", newOrder: "New order", close: "Close", sendClient: "Send to client",
+      send: "Send via WhatsApp", sendTitle: "Send quote", msg: "Message", attach: "Attach", quoteImg: "Quote as image",
+      openWa: "Open WhatsApp chat", shareWa: "Share (pick WhatsApp and the contact)", copyText: "Copy text", copied: "Text copied",
+      waNoPhone: "This client has no phone: WhatsApp will ask you to pick the contact.",
+      shareOnlyApp: "Sending files works in the installed app.", copyFallback: "Select the text and copy it:",
+      hello: "Hi", quoteIntro: "here is your quote", thanks: "Thank you!",
+      noHistory: "No saved orders yet. Build one and tap Save in the breakdown.", search: "Search by order or client",
+      open: "Open", del: "Delete", sure: "Sure?", untitled: "Untitled", edit: "Edit",
+      noClients: "No clients yet. Add the first one with the button above.", searchClients: "Search client",
+      clientName: "Name", phone: "Phone / WhatsApp", address: "Address", email: "Email", notes: "Notes", notesPh: "E.g. prefers pickup",
+      ordersN: "orders", boughtTotal: "Total bought", clientOrders: "This client's orders", chat: "WhatsApp", nameRequired: "Enter at least the name.",
+      myMaterials: "My materials", myPrinters: "My printers", defaults: "Defaults", general: "General", business: "My business",
+      businessName: "Business name", businessHint: "Shown on the quote the client receives.", taxName: "Tax name", cc: "Country code",
+      ccHint: "For WhatsApp: numbers starting with 0 get this code.",
+      name: "Name", type: "Type", watts: "Power draw", printerPrice: "Purchase price", life: "Lifespan", maint: "Maintenance per hour",
+      symbol: "Currency symbol", custom: "Other", decimals: "Decimals", language: "Language",
+      backup: "Backup", exportData: "Export everything", importData: "Import", backupHint: "Export makes one file with clients, orders, photos and settings. Save it to Drive or anywhere. Import loads it on this or another phone.",
+      exported: "Backup ready", importOk: "Data imported", importBad: "That file is not a TebaCalc backup.",
+      importConfirm: "Importing replaces everything on this phone with the backup's content.", importDo: "Replace and load",
+      newMat: "New material", newPrinter: "New printer", noPrinter: "No printer", working: "Preparing…",
+      date: "Date", quote: "Quote", fileTooBig: "That file is over 20 MB and was not saved."
+    }
+  };
+  I18N.es.newPrinter = "Nueva impresora";
+  var SYMBOLS = ["$", "€", "¢", "£", "₹", "¥", "₱"];
+
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+  function num(v) { var n = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isFinite(n) ? n : 0; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  // ---------- storage: IndexedDB (state + files), memory fallback ----------
+  var db = null, memFiles = {};
+  function idb() {
+    return new Promise(function (res) {
+      try {
+        var r = indexedDB.open("tebacalc", 1);
+        r.onupgradeneeded = function () { var d = r.result; d.createObjectStore("kv"); d.createObjectStore("files"); };
+        r.onsuccess = function () { db = r.result; res(); };
+        r.onerror = function () { res(); };
+      } catch (e) { res(); }
+    });
+  }
+  function tx(store, mode, fn) {
+    return new Promise(function (res, rej) {
+      if (!db) { res(fn(null)); return; }
+      try {
+        var t = db.transaction(store, mode), s = t.objectStore(store), out = fn(s);
+        t.oncomplete = function () { res(out && "result" in out ? out.result : out); };
+        t.onerror = function () { rej(t.error); };
+      } catch (e) { rej(e); }
+    });
+  }
+  function kvGet(k) { return tx("kv", "readonly", function (s) { return s ? s.get(k) : null; }).catch(function () { return null; }); }
+  function kvSet(k, v) { return tx("kv", "readwrite", function (s) { if (s) s.put(v, k); }).catch(function () {}); }
+  function fileGet(id) { return db ? tx("files", "readonly", function (s) { return s.get(id); }).catch(function () { return null; }) : Promise.resolve(memFiles[id] || null); }
+  function filePut(f) { if (!db) { memFiles[f.id] = f; return Promise.resolve(); } return tx("files", "readwrite", function (s) { s.put(f, f.id); }); }
+  function fileDel(id) { if (!db) { delete memFiles[id]; return Promise.resolve(); } return tx("files", "readwrite", function (s) { s.delete(id); }).catch(function () {}); }
+  function fileKeys() { return db ? tx("files", "readonly", function (s) { return s.getAllKeys(); }).catch(function () { return []; }) : Promise.resolve(Object.keys(memFiles)); }
+  function fileMeta(id) { return state.fileMeta[id] || { name: "archivo", type: "" }; }
+
+  var saveTimer;
+  function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(function () { kvSet("state", state); }, 250); }
+
+  // ---------- model ----------
+  function defaults() {
+    var m1 = uid(), m2 = uid(), p1 = uid();
+    return {
+      v: 3, example: true,
+      settings: { sym: "$", dec: 2, lang: "es", kwh: 8, rate: 400, fail: 10, profit: 50, fee: 0, tax: 22, taxName: "IVA", cc: "598", business: "" },
+      materials: [
+        { id: m1, name: "PLA Básico", type: "PLA", color: "#1b1b1b", price: 900, weight: 1000 },
+        { id: m2, name: "PETG", type: "PETG", color: "#f2f2f2", price: 1100, weight: 1000 }
+      ],
+      printers: [{ id: p1, name: "Bambu Lab A1", watts: 100, price: 30000, life: 5000, maint: 1 }],
+      clients: [], history: [], fileMeta: {}, job: null
+    };
+  }
+  function newFil(st) {
+    var m = st.materials[0];
+    return m ? { mat: m.id, price: m.price, weight: m.weight, color: m.color, g: 0 } : { mat: "", price: 0, weight: 1000, color: "#1fd16b", g: 0 };
+  }
+  function newPrint(st, n) {
+    var f = newFil(st);
+    return { id: uid(), name: "", qty: 1, beds: 1, fil: [f], printer: st.printers[0] ? st.printers[0].id : "", h: 0, m: 0, fail: st.settings.fail, prep: 0, post: 0, open: true, n: n || 1 };
+  }
+  function newOrder(st, clientId) {
+    var s = st.settings;
+    return { id: null, name: "", clientId: clientId || "", prints: [newPrint(st, 1)], rate: s.rate, kwh: s.kwh, supplies: 0, pack: 0, ship: 0, profit: s.profit, fee: s.fee, tax: s.tax, files: [] };
+  }
+  function exampleOrder(st) {
+    var o = newOrder(st), p = o.prints[0];
+    p.name = "Soporte PS5"; p.h = 5; p.fil[0].g = 120; p.prep = 10; p.post = 10; p.open = true; o.pack = 30;
+    return o;
+  }
+  // v2 (single print per job, localStorage) -> v3
+  function migrateV2(old) {
+    var st = defaults();
+    st.example = !!old.example;
+    ["materials", "printers"].forEach(function (k) { if (old[k]) st[k] = old[k]; });
+    Object.keys(old.settings || {}).forEach(function (k) { st.settings[k] = old.settings[k]; });
+    function clientFor(name) {
+      name = (name || "").trim(); if (!name) return "";
+      for (var i = 0; i < st.clients.length; i++) if (st.clients[i].name.toLowerCase() === name.toLowerCase()) return st.clients[i].id;
+      var c = { id: uid(), name: name, phone: "", address: "", email: "", notes: "", created: Date.now() }; st.clients.push(c); return c.id;
+    }
+    function conv(j) {
+      return { id: j.id || null, name: j.name || "", clientId: clientFor(j.client),
+        prints: [{ id: uid(), name: j.name || "", qty: j.qty || 1, beds: 1, fil: j.fil || [], printer: j.printer || "", h: j.h || 0, m: j.m || 0, fail: j.fail, prep: j.prep || 0, post: j.post || 0, open: false, n: 1 }],
+        rate: j.rate, kwh: j.kwh, supplies: j.supplies || 0, pack: j.pack || 0, ship: j.ship || 0, profit: j.profit, fee: j.fee || 0, tax: j.tax, files: [] };
+    }
+    st.history = (old.history || []).map(function (h) { var o = conv(h.job); o.id = h.id; o.savedAt = h.at; return o; });
+    st.job = old.job ? conv(old.job) : exampleOrder(st);
+    st.job.prints[0].open = true;
+    return st;
+  }
+
+  var state;
+  function t(k) { return (I18N[state.settings.lang] || I18N.es)[k] || I18N.es[k] || k; }
+  function loc() { return state.settings.lang === "en" ? "en-US" : "es-UY"; }
+  function money(n) {
+    var d = Math.max(0, Math.min(4, num(state.settings.dec)));
+    return state.settings.sym + " " + (n || 0).toLocaleString(loc(), { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function findIn(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+  function findPrinter(id) { return findIn(state.printers, id); }
+  function findMat(id) { return findIn(state.materials, id); }
+  function findClient(id) { return id ? findIn(state.clients, id) : null; }
+  function fmtTime(h) { var hh = Math.floor(h), mm = Math.round((h - hh) * 60); if (mm === 60) { hh++; mm = 0; } return hh + " h " + mm + " min"; }
+
+  // Cost model from the design doc, applied per print, then order-level extras, profit, fee and tax.
+  function computePrint(p, o) {
+    var beds = Math.max(1, Math.round(num(p.beds)) || 1);
+    var hours = (num(p.h) + num(p.m) / 60) * beds;
+    var material = 0, grams = 0;
+    p.fil.forEach(function (f) { var w = num(f.weight); grams += num(f.g) * beds; if (w > 0) material += num(f.g) * beds * num(f.price) / w; });
+    var pr = findPrinter(p.printer);
+    var energy = pr ? hours * num(pr.watts) / 1000 * num(o.kwh) : 0;
+    var wear = pr ? hours * ((num(pr.life) > 0 ? num(pr.price) / num(pr.life) : 0) + num(pr.maint)) : 0;
+    var failCost = (material + energy + wear) * num(p.fail) / 100;
+    var labor = (num(p.prep) + num(p.post)) / 60 * num(o.rate);
+    var pieces = Math.max(1, Math.round(num(p.qty)) || 1) * beds;
+    return { hours: hours, grams: grams, material: material, energy: energy, wear: wear, failCost: failCost, labor: labor,
+      cost: material + energy + wear + failCost + labor, pieces: pieces, beds: beds };
+  }
+  function compute(o) {
+    var r = { material: 0, energy: 0, wear: 0, failCost: 0, labor: 0, hours: 0, grams: 0, pieces: 0, printsCost: 0 };
+    r.lines = o.prints.map(function (p) {
+      var c = computePrint(p, o);
+      ["material", "energy", "wear", "failCost", "labor", "hours", "grams", "pieces"].forEach(function (k) { r[k] += c[k]; });
+      r.printsCost += c.cost; return c;
+    });
+    r.supplies = num(o.supplies); r.pack = num(o.pack); r.ship = num(o.ship);
+    r.cost = r.printsCost + r.supplies + r.pack;
+    r.profitAmt = r.cost * num(o.profit) / 100;
+    r.net = r.cost + r.profitAmt;
+    var feeRate = Math.min(num(o.fee), 95) / 100;
+    r.subtotal = r.net / (1 - feeRate);
+    r.feeAmt = r.subtotal - r.net;
+    r.taxAmt = r.subtotal * num(o.tax) / 100;
+    r.total = r.subtotal + r.taxAmt + r.ship;
+    // Each line's share of the pre-tax price, so the client sees a price per item.
+    r.lines.forEach(function (c) {
+      var share = r.printsCost > 0 ? c.cost / r.printsCost : 1 / r.lines.length;
+      c.price = r.subtotal * share; c.unit = c.price / c.pieces;
+    });
+    return r;
+  }
+  function printLabel(p, i) { return (p.name || "").trim() || t("printN") + " " + (i + 1); }
+  function orderLabel(o) { var c = findClient(o.clientId); return (o.name || "").trim() || (c ? c.name : "") || t("untitled"); }
+
+  // ---------- native bridge (Capacitor) with web fallbacks ----------
+  // The page loads without @capacitor/core, so native plugins are called through the bridge directly.
+  function cap() {
+    var C = window.Capacitor;
+    if (!C || !C.nativePromise || !(C.isNativePlatform && C.isNativePlatform())) return null;
+    var call = function (plugin) { return function (method) { return function (opts) { return C.nativePromise(plugin, method, opts || {}); }; }; };
+    return { Filesystem: { writeFile: call("Filesystem")("writeFile") }, Share: { share: call("Share")("share") } };
+  }
+  function blobToBase64(blob) {
+    return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(String(r.result).split(",")[1] || ""); }; r.onerror = rej; r.readAsDataURL(blob); });
+  }
+  function safeName(n) { return String(n || "archivo").replace(/[^\w.\-áéíóúñÁÉÍÓÚÑ ]+/g, "_").slice(0, 80); }
+  // files: [{name, blob}]
+  function shareFiles(text, files, title) {
+    var P = cap();
+    if (P && P.Filesystem && P.Share) {
+      var dir = "share-" + Date.now();
+      return Promise.all(files.map(function (f, i) {
+        return blobToBase64(f.blob).then(function (b64) {
+          return P.Filesystem.writeFile({ path: dir + "/" + i + "-" + safeName(f.name), data: b64, directory: "CACHE", recursive: true });
+        }).then(function (w) { return w.uri; });
+      })).then(function (uris) {
+        var opts = { dialogTitle: title || "TebaCalc" };
+        if (text) opts.text = text;
+        if (uris.length) opts.files = uris;
+        return P.Share.share(opts);
+      });
+    }
+    var webFiles = files.map(function (f) { return new File([f.blob], safeName(f.name), { type: f.blob.type }); });
+    if (navigator.canShare && navigator.canShare({ files: webFiles })) return navigator.share({ text: text, files: webFiles });
+    return Promise.reject(new Error("noshare"));
+  }
+
+  // ---------- files ----------
+  function compressImage(file) {
+    return new Promise(function (res) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var max = 1600, w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+        var c = document.createElement("canvas"); c.width = Math.round(w * k); c.height = Math.round(h * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { res(b && b.size < file.size ? b : file); }, "image/jpeg", 0.82);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); res(file); };
+      img.src = url;
+    });
+  }
+  function addFiles(list) {
+    var arr = Array.prototype.slice.call(list || []);
+    return arr.reduce(function (p, file) {
+      return p.then(function () {
+        if (file.size > 20 * 1024 * 1024) { toast(t("fileTooBig")); return; }
+        var isImg = /^image\//.test(file.type) && !/gif|svg/.test(file.type);
+        return (isImg ? compressImage(file) : Promise.resolve(file)).then(function (blob) {
+          var id = uid(), name = file.name || (isImg ? "foto.jpg" : "archivo");
+          if (isImg && blob !== file) name = name.replace(/\.\w+$/, "") + ".jpg";
+          state.fileMeta[id] = { name: name, type: blob.type || file.type || "", size: blob.size };
+          state.job.files.push(id);
+          return filePut({ id: id, blob: blob });
+        });
+      });
+    }, Promise.resolve()).then(function () { persist(); render(); });
+  }
+  var urlCache = {};
+  function fileURL(id) {
+    if (urlCache[id]) return Promise.resolve(urlCache[id]);
+    return fileGet(id).then(function (f) { if (!f) return ""; urlCache[id] = URL.createObjectURL(f.blob); return urlCache[id]; });
+  }
+  function hydrateThumbs(root) {
+    (root || document).querySelectorAll("img[data-file]").forEach(function (img) {
+      fileURL(img.dataset.file).then(function (u) { if (u) img.src = u; });
+    });
+  }
+  // Delete stored blobs that no order references any more.
+  function gcFiles() {
+    var used = {};
+    state.history.concat([state.job]).forEach(function (o) { (o.files || []).forEach(function (id) { used[id] = 1; }); });
+    return fileKeys().then(function (keys) {
+      keys.forEach(function (k) { if (!used[k]) { fileDel(k); delete state.fileMeta[k]; if (urlCache[k]) { URL.revokeObjectURL(urlCache[k]); delete urlCache[k]; } } });
+      persist();
+    });
+  }
+  function isImage(id) { return /^image\//.test(fileMeta(id).type); }
+  function extOf(id) { var m = /\.(\w{1,5})$/.exec(fileMeta(id).name); return m ? m[1].toUpperCase() : "FILE"; }
+
+  // ---------- rendering ----------
+  var view = "calc";
+  var main = document.getElementById("main");
+  function unitInput(id, attrs, val, unit, type) {
+    var input = '<input id="' + id + '" ' + attrs + ' type="' + (type || "number") + '" inputmode="' + (type === "text" ? "text" : "decimal") + '" step="any" min="0" value="' + esc(val) + '">';
+    return unit ? '<div class="unit">' + input + "<em>" + esc(unit) + "</em></div>" : input;
+  }
+  function fld(label, id, attrs, val, unit, type, ph) {
+    var inner = unitInput(id, attrs + (ph ? ' placeholder="' + esc(ph) + '"' : ""), val, unit, type);
+    return '<label class="f"><span>' + esc(label) + "</span>" + inner + "</label>";
+  }
+  function jf(label, key, unit, type, ph) { return fld(label, "j-" + key, 'data-k="' + key + '"', state.job[key], unit, type, ph); }
+
+  function matOptions(sel) {
+    return '<option value="">' + esc(t("manual")) + "</option>" + state.materials.map(function (m) {
+      return '<option value="' + m.id + '"' + (m.id === sel ? " selected" : "") + ">" + esc(m.name) + "</option>";
+    }).join("");
+  }
+  function printSummary(p, c) {
+    return c.pieces + " " + (c.pieces === 1 ? t("piece") : t("pieces")) + (c.beds > 1 ? " · " + c.beds + " " + t("beds").toLowerCase() : "") + " · " + fmtTime(c.hours) + " · " + Math.round(c.grams) + " g";
+  }
+  function renderPrint(p, i, c) {
+    var s = state.settings, open = !!p.open, pi = 'data-p="' + i + '"';
+    var head = '<button type="button" class="print-head" data-act="toggle" ' + pi + ' aria-expanded="' + open + '">' +
+      '<span class="pn"><b id="pn-' + i + '">' + esc(printLabel(p, i)) + '</b><small id="ps-' + i + '">' + esc(printSummary(p, c)) + "</small></span>" +
+      '<span class="pc" id="pc-' + i + '">' + esc(money(c.cost)) + '</span><span class="chev">›</span></button>';
+    if (!open) return '<div class="print" data-open="false">' + head + "</div>";
+    var fils = p.fil.map(function (f, fi) {
+      var manual = !f.mat, fa = pi + ' data-fi="' + fi + '"';
+      return '<div class="fil"><div class="fil-head"><span class="dot" id="dot-' + i + "-" + fi + '" style="background:' + esc(f.color) + '"></span>' +
+        '<select id="f-mat-' + i + "-" + fi + '" ' + fa + ' data-f="mat" aria-label="' + esc(t("material")) + '">' + matOptions(f.mat) + "</select>" +
+        (p.fil.length > 1 ? '<button class="icon" type="button" data-act="rmfil" ' + fa + ' aria-label="' + esc(t("remove")) + '">✕</button>' : "") + "</div>" +
+        (manual ? '<div class="grid3">' +
+          fld(t("spoolPrice"), "f-price-" + i + "-" + fi, fa + ' data-f="price"', f.price, s.sym) +
+          fld(t("spoolWeight"), "f-weight-" + i + "-" + fi, fa + ' data-f="weight"', f.weight, "g") +
+          '<label class="f"><span>' + esc(t("color")) + '</span><input id="f-color-' + i + "-" + fi + '" ' + fa + ' data-f="color" type="color" value="' + esc(f.color) + '"></label></div>' : "") +
+        fld(t("gramsBed"), "f-g-" + i + "-" + fi, fa + ' data-f="g"', f.g, "g") + "</div>";
+    }).join("");
+    var printerOpts = '<option value="">' + esc(t("noPrinter")) + "</option>" + state.printers.map(function (pr) {
+      return '<option value="' + pr.id + '"' + (pr.id === p.printer ? " selected" : "") + ">" + esc(pr.name) + " · " + esc(pr.watts) + " W</option>";
+    }).join("");
+    var pf = function (label, key, unit, type, ph) { return fld(label, "p-" + key + "-" + i, pi + ' data-pk="' + key + '"', p[key], unit, type, ph); };
+    return '<div class="print" data-open="true">' + head + '<div class="print-body">' +
+      pf(t("printName"), "name", "", "text", t("printPh")) +
+      '<div class="grid2">' + pf(t("perBed"), "qty", "u") + pf(t("beds"), "beds", "") + "</div>" +
+      '<p class="hint">' + esc(t("filaments")) + "</p>" + fils +
+      '<button class="ghost" type="button" data-act="addfil" ' + pi + ">" + esc(t("addColor")) + "</button>" +
+      '<label class="f"><span>' + esc(t("printer")) + '</span><select id="p-printer-' + i + '" ' + pi + ' data-pk="printer">' + printerOpts + "</select></label>" +
+      '<div class="grid3">' + pf(t("hoursBed"), "h", "h") + pf(t("minutes"), "m", t("min")) + pf(t("fail"), "fail", "%") + "</div>" +
+      '<div class="grid2">' + pf(t("prep"), "prep", t("min")) + pf(t("post"), "post", t("min")) + "</div>" +
+      '<p class="hint">' + esc(t("workHint")) + "</p>" +
+      '<div class="print-foot"><button type="button" data-act="dupprint" ' + pi + ">" + esc(t("duplicate")) + "</button>" +
+      (state.job.prints.length > 1 ? '<button type="button" class="danger" data-act="rmprint" ' + pi + ">" + esc(t("remove")) + "</button>" : "") + "</div>" +
+      "</div></div>";
+  }
+  function renderFiles(ids, removable) {
+    var items = ids.map(function (id) {
+      var inner = isImage(id) ? '<img alt="" data-file="' + id + '">' : '<div class="doc"><b>' + esc(extOf(id)) + "</b>" + esc(fileMeta(id).name) + "</div>";
+      return '<div class="file" data-id="' + id + '">' + inner + (removable ? '<button type="button" data-act="rmfile" aria-label="' + esc(t("del")) + '">✕</button>' : "") + "</div>";
+    }).join("");
+    return items ? '<div class="files">' + items + "</div>" : "";
+  }
+  function clientOptions(sel) {
+    return '<option value="">' + esc(t("noClient")) + "</option>" + state.clients.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (c) {
+      return '<option value="' + c.id + '"' + (c.id === sel ? " selected" : "") + ">" + esc(c.name) + "</option>";
+    }).join("");
+  }
+  function renderCalc() {
+    var j = state.job, s = state.settings, r = compute(j);
+    return (state.example ? '<p class="example-note">' + esc(t("example")) + "</p>" : "") +
+      '<section class="view">' +
+      '<div class="block"><h2>' + esc(t("order")) + '</h2><div class="card">' +
+        '<div class="row-btn"><label class="f"><span>' + esc(t("client")) + '</span><select id="j-client" data-k="clientId">' + clientOptions(j.clientId) + "</select></label>" +
+        '<button type="button" data-act="newclient">' + esc(t("newClient")) + "</button></div>" +
+        jf(t("orderName"), "name", "", "text", t("orderPh")) +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("prints")) + '</h2><div class="card">' +
+        j.prints.map(function (p, i) { return renderPrint(p, i, r.lines[i]); }).join("") +
+        '<button class="ghost" type="button" data-act="addprint">' + esc(t("addPrint")) + "</button></div></div>" +
+      '<div class="block"><h2>' + esc(t("files")) + '</h2><div class="card">' +
+        (j.files.length ? renderFiles(j.files, true) : '<p class="hint">' + esc(t("noFiles")) + "</p>") +
+        '<div class="file-add"><label>' + esc(t("gallery")) + '<input type="file" id="add-files" multiple accept="image/*,application/pdf,*/*"></label>' +
+        '<label>' + esc(t("camera")) + '<input type="file" id="add-camera" accept="image/*" capture="environment"></label></div>' +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("work")) + '</h2><div class="card"><div class="grid2">' +
+        jf(t("rate"), "rate", s.sym + "/h") + jf(t("kwh"), "kwh", s.sym) + "</div></div></div>" +
+      '<div class="block"><h2>' + esc(t("extras")) + '</h2><div class="card">' +
+        '<div class="grid3">' + jf(t("supplies"), "supplies", s.sym) + jf(t("pack"), "pack", s.sym) + jf(t("ship"), "ship", s.sym) + "</div>" +
+        '<p class="hint">' + esc(t("suppliesHint")) + "</p></div></div>" +
+      '<div class="block"><h2>' + esc(t("sale")) + '</h2><div class="card">' +
+        '<div class="grid3">' + jf(t("profit"), "profit", "%") + jf(t("fee"), "fee", "%") + jf(t("tax"), "tax", "%") + "</div>" +
+        '<p class="hint">' + esc(t("profitHint")) + "</p></div></div>" +
+      '<p class="ver">TebaCalc v' + VERSION + "</p></section>";
+  }
+
+  function clientStats(id) {
+    var n = 0, sum = 0;
+    state.history.forEach(function (o) { if (o.clientId === id) { n++; sum += compute(o).total; } });
+    return { n: n, sum: sum };
+  }
+  function renderClients() {
+    var q = ((document.getElementById("c-search") || {}).value || "").toLowerCase();
+    var list = state.clients.filter(function (c) { return (c.name + " " + c.phone + " " + c.address).toLowerCase().indexOf(q) !== -1; })
+      .sort(function (a, b) { return a.name.localeCompare(b.name); });
+    var items = list.map(function (c) {
+      var st = clientStats(c.id);
+      return '<div class="item" data-id="' + c.id + '"><div class="t"><b>' + esc(c.name) + "</b><span>" + esc(money(st.sum)) + "</span></div>" +
+        '<div class="s">' + [c.phone, c.address].filter(Boolean).map(esc).join(" · ") + (c.phone || c.address ? " · " : "") + st.n + " " + esc(t("ordersN")) + "</div>" +
+        '<div class="a">' + (c.phone ? '<a class="wa" style="padding:6px 10px;font-size:13px" target="_blank" rel="noopener" href="' + esc(waLink(c.phone, "")) + '">' + esc(t("chat")) + "</a>" : "") +
+        '<button type="button" data-act="editclient">' + esc(t("edit")) + '</button><button type="button" class="primary" data-act="orderfor">' + esc(t("newOrder")) + "</button></div></div>";
+    }).join("");
+    return '<section class="view"><div class="block"><h2>' + esc(t("clients")) + "</h2>" +
+      '<div class="row-btn"><input id="c-search" type="search" placeholder="' + esc(t("searchClients")) + '" value="' + esc(q) + '"><button type="button" class="primary" data-act="newclient">' + esc(t("newClient")) + "</button></div>" +
+      '<div class="list">' + (items || '<p class="empty">' + esc(t("noClients")) + "</p>") + "</div></div></section>";
+  }
+
+  function renderHistory() {
+    var q = ((document.getElementById("h-search") || {}).value || "").toLowerCase();
+    var list = state.history.filter(function (o) {
+      var c = findClient(o.clientId);
+      return ((o.name || "") + " " + (c ? c.name : "") + " " + o.prints.map(function (p) { return p.name; }).join(" ")).toLowerCase().indexOf(q) !== -1;
+    });
+    var items = list.map(function (o) {
+      var r = compute(o), c = findClient(o.clientId);
+      return '<div class="item" data-id="' + o.id + '"><div class="t"><b>' + esc(orderLabel(o)) + "</b><span>" + esc(money(r.total)) + "</span></div>" +
+        '<div class="s">' + esc(new Date(o.savedAt || Date.now()).toLocaleDateString(loc())) + (c && o.name ? " · " + esc(c.name) : "") +
+        " · " + r.pieces + " " + esc(t("pieces")) + " · " + Math.round(r.grams) + " g · " + fmtTime(r.hours) +
+        ((o.files || []).length ? ' · <span class="pill">' + o.files.length + " 📎</span>" : "") + "</div>" +
+        '<div class="s">' + o.prints.map(function (p, i) { return esc(printLabel(p, i)); }).join(", ") + "</div>" +
+        '<div class="a"><button type="button" data-act="sendorder">' + esc(t("chat")) + '</button><button type="button" data-act="open">' + esc(t("open")) + '</button><button type="button" class="danger" data-act="del">' + esc(t("del")) + "</button></div></div>";
+    }).join("");
+    return '<section class="view"><div class="block"><h2>' + esc(t("history")) + "</h2>" +
+      '<input id="h-search" type="search" placeholder="' + esc(t("search")) + '" value="' + esc(q) + '">' +
+      '<div class="list">' + (items || '<p class="empty">' + esc(t("noHistory")) + "</p>") + "</div></div></section>";
+  }
+
+  function renderSettings() {
+    var s = state.settings;
+    var sf = function (label, key, unit, type) { return fld(label, "s-" + key, 'data-set="' + key + '"' + (type === "text" ? ' data-text="1"' : ""), s[key], unit, type); };
+    var coll = function (name, i, key, val, unit, type) {
+      return fld(t(key === "price" && name === "printers" ? "printerPrice" : key === "price" ? "spoolPrice" : key === "weight" ? "spoolWeight" : key), name + "-" + key + "-" + i, 'data-s="' + key + '"', val, unit, type);
+    };
+    var mats = state.materials.map(function (m, i) {
+      return '<div class="fil" data-coll="materials" data-i="' + i + '"><div class="fil-head"><span class="dot" style="background:' + esc(m.color) + '"></span>' +
+        '<input id="materials-name-' + i + '" data-s="name" type="text" value="' + esc(m.name) + '" aria-label="' + esc(t("name")) + '">' +
+        '<button type="button" class="icon" data-act="rm" aria-label="' + esc(t("del")) + '">✕</button></div>' +
+        '<div class="grid2">' + coll("materials", i, "type", m.type, "", "text") +
+        '<label class="f"><span>' + esc(t("color")) + '</span><input id="materials-color-' + i + '" data-s="color" type="color" value="' + esc(m.color) + '"></label></div>' +
+        '<div class="grid2">' + coll("materials", i, "price", m.price, s.sym) + coll("materials", i, "weight", m.weight, "g") + "</div></div>";
+    }).join("");
+    var prs = state.printers.map(function (p, i) {
+      return '<div class="fil" data-coll="printers" data-i="' + i + '"><div class="fil-head">' +
+        '<input id="printers-name-' + i + '" data-s="name" type="text" value="' + esc(p.name) + '" aria-label="' + esc(t("name")) + '">' +
+        '<button type="button" class="icon" data-act="rm" aria-label="' + esc(t("del")) + '">✕</button></div>' +
+        '<div class="grid2">' + coll("printers", i, "watts", p.watts, "W") + coll("printers", i, "price", p.price, s.sym) + "</div>" +
+        '<div class="grid2">' + coll("printers", i, "life", p.life, "h") + coll("printers", i, "maint", p.maint, s.sym) + "</div></div>";
+    }).join("");
+    var custom = SYMBOLS.indexOf(s.sym) === -1;
+    var syms = SYMBOLS.map(function (c) { return '<button type="button" data-sym="' + c + '" aria-pressed="' + (c === s.sym) + '">' + c + "</button>"; }).join("");
+    return '<section class="view">' +
+      '<div class="block"><h2>' + esc(t("business")) + '</h2><div class="card">' +
+        sf(t("businessName"), "business", "", "text") + '<p class="hint">' + esc(t("businessHint")) + "</p>" +
+        '<div class="grid2">' + sf(t("taxName"), "taxName", "", "text") + sf(t("cc"), "cc", "+", "text") + "</div>" +
+        '<p class="hint">' + esc(t("ccHint")) + "</p></div></div>" +
+      '<div class="block"><h2>' + esc(t("general")) + '</h2><div class="card">' +
+        '<div class="f"><span class="hint">' + esc(t("symbol")) + '</span><div class="syms">' + syms + "</div></div>" +
+        '<div class="grid2"><label class="f"><span>' + esc(t("custom")) + '</span><input id="s-symc" type="text" maxlength="4" value="' + (custom ? esc(s.sym) : "") + '" placeholder="R$, Bs, S/…"></label>' +
+        '<label class="f"><span>' + esc(t("decimals")) + '</span><select id="s-dec">' + [0, 1, 2].map(function (d) { return '<option value="' + d + '"' + (num(s.dec) === d ? " selected" : "") + ">" + d + "</option>"; }).join("") + "</select></label></div>" +
+        '<label class="f"><span>' + esc(t("language")) + '</span><select id="s-lang"><option value="es"' + (s.lang === "es" ? " selected" : "") + '>Español</option><option value="en"' + (s.lang === "en" ? " selected" : "") + ">English</option></select></label>" +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("defaults")) + '</h2><div class="card">' +
+        '<div class="grid2">' + sf(t("kwh"), "kwh", s.sym) + sf(t("rate"), "rate", s.sym + "/h") + "</div>" +
+        '<div class="grid2">' + sf(t("fail"), "fail", "%") + sf(t("profit"), "profit", "%") + "</div>" +
+        '<div class="grid2">' + sf(t("fee"), "fee", "%") + sf(t("tax"), "tax", "%") + "</div>" +
+      "</div></div>" +
+      '<div class="block"><h2>' + esc(t("myMaterials")) + '</h2><div class="card">' + mats +
+        '<button class="ghost" type="button" data-act="addmat">+ ' + esc(t("newMat")) + "</button></div></div>" +
+      '<div class="block"><h2>' + esc(t("myPrinters")) + '</h2><div class="card">' + prs +
+        '<button class="ghost" type="button" data-act="addprinter">+ ' + esc(t("newPrinter")) + "</button></div></div>" +
+      '<div class="block"><h2>' + esc(t("backup")) + '</h2><div class="card"><p class="hint">' + esc(t("backupHint")) + '</p><div class="actions">' +
+        '<button type="button" class="primary" data-act="export">' + esc(t("exportData")) + '</button><button type="button" data-act="import">' + esc(t("importData")) + "</button></div></div></div>" +
+      '<p class="ver">TebaCalc v' + VERSION + "</p></section>";
+  }
+
+  function render() {
+    document.documentElement.lang = state.settings.lang;
+    document.getElementById("tagline").textContent = t("tagline");
+    main.innerHTML = view === "calc" ? renderCalc() : view === "clients" ? renderClients() : view === "history" ? renderHistory() : renderSettings();
+    renderTabs(); updatePrice(); hydrateThumbs(main);
+  }
+  var ICONS = {
+    calc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h2M12 12h2M8 16h2M12 16h2"/></svg>',
+    clients: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.4 3.5 5.2"/></svg>',
+    history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>'
+  };
+  function renderTabs() {
+    document.getElementById("tabs").innerHTML = ["calc", "clients", "history", "settings"].map(function (v) {
+      return '<button type="button" data-view="' + v + '" aria-current="' + (v === view) + '">' + ICONS[v] + "<span>" + esc(t(v)) + "</span></button>";
+    }).join("");
+    document.getElementById("pricebar").hidden = view !== "calc";
+  }
+  function updatePrice() {
+    var r = compute(state.job);
+    document.getElementById("pb-lbl").textContent = t("finalPrice");
+    document.getElementById("pb-total").textContent = money(r.total);
+    document.getElementById("pb-unit").textContent = r.pieces + " " + (r.pieces === 1 ? t("piece") : t("pieces"));
+    document.getElementById("pb-btn").textContent = t("breakdown");
+    if (view === "calc") r.lines.forEach(function (c, i) {
+      var p = state.job.prints[i], a = document.getElementById("pc-" + i), b = document.getElementById("ps-" + i), n = document.getElementById("pn-" + i);
+      if (a) a.textContent = money(c.cost);
+      if (b) b.textContent = printSummary(p, c);
+      if (n) n.textContent = printLabel(p, i);
+    });
+  }
+
+  // ---------- sheets ----------
+  var overlay = document.getElementById("overlay");
+  function closeSheet() { overlay.innerHTML = ""; }
+  function openSheet(html) {
+    overlay.innerHTML = '<div class="sheet-bg" data-act="close"><div class="sheet" role="dialog" aria-modal="true">' + html + "</div></div>";
+    hydrateThumbs(overlay);
+  }
+  var COLORS = { material: "#1fd16b", energy: "#f2c14e", wear: "#5aa9e6", failCost: "#e07a5f", labor: "#b48ef0", extras: "#8e9a92" };
+  function row(l, v, d, cls) { return '<div class="row' + (cls ? " " + cls : "") + '"><span>' + esc(l) + (d ? '<span class="d">' + esc(d) + "</span>" : "") + "</span><span>" + esc(money(v)) + "</span></div>"; }
+  function showBreakdown() {
+    var j = state.job, r = compute(j);
+    var parts = [["material", r.material], ["energy", r.energy], ["wear", r.wear], ["failCost", r.failCost], ["labor", r.labor], ["extras", r.supplies + r.pack]];
+    var bar = parts.map(function (p) { return r.cost > 0 && p[1] > 0 ? '<span style="width:' + (p[1] / r.cost * 100) + "%;background:" + COLORS[p[0]] + '"></span>' : ""; }).join("");
+    var label = function (k) { return k === "extras" ? t("supplies") + " + " + t("pack") : t(k === "material" ? "matCost" : k); };
+    var legend = parts.map(function (p) { return p[1] > 0 ? '<span><i style="background:' + COLORS[p[0]] + '"></i>' + esc(label(p[0])) + "</span>" : ""; }).join("");
+    var lines = j.prints.length > 1 ? j.prints.map(function (p, i) { var c = r.lines[i]; return row(printLabel(p, i), c.cost, printSummary(p, c)); }).join("") : "";
+    openSheet(
+      "<h3>" + esc(orderLabel(j)) + "</h3>" +
+      '<div class="bar">' + bar + '</div><div class="legend">' + legend + "</div>" +
+      (lines ? '<div class="rows">' + lines + "</div>" : "") +
+      '<div class="rows">' +
+        row(t("matCost"), r.material, Math.round(r.grams) + " g") +
+        row(t("energy"), r.energy, fmtTime(r.hours)) +
+        row(t("wear"), r.wear) +
+        row(t("failCost"), r.failCost) +
+        row(t("labor"), r.labor) +
+        (r.supplies ? row(t("supplies"), r.supplies) : "") +
+        (r.pack ? row(t("pack"), r.pack) : "") +
+        row(t("cost"), r.cost, "", "sub") +
+        row(t("profitAmt"), r.profitAmt, num(j.profit) + "%") +
+        (r.feeAmt ? row(t("feeAmt"), r.feeAmt, num(j.fee) + "%") : "") +
+        row(t("net"), r.subtotal, "", "sub") +
+        row(state.settings.taxName || t("taxAmt"), r.taxAmt, num(j.tax) + "%") +
+        (r.ship ? row(t("ship"), r.ship) : "") +
+        row(t("finalPrice"), r.total, r.pieces + " " + t("pieces"), "total") +
+      "</div>" +
+      '<div class="actions"><button type="button" class="primary" data-act="save">' + esc(t("save")) + '</button>' +
+      '<button type="button" data-act="send" style="background:#25d366;color:#052e14;font-weight:600">' + esc(t("send")) + '</button>' +
+      '<button type="button" data-act="new">' + esc(t("newOrder")) + '</button></div>' +
+      '<button type="button" data-act="close">' + esc(t("close")) + "</button>"
+    );
+  }
+
+  function saveJob() {
+    var j = state.job;
+    if (!j.id) j.id = uid();
+    j.savedAt = Date.now();
+    var copy = clone(j);
+    copy.prints.forEach(function (p) { p.open = false; });
+    state.history = state.history.filter(function (h) { return h.id !== j.id; });
+    state.history.unshift(copy);
+    persist();
+  }
+
+  // Client-facing message: items, subtotal, tax, shipping and total. No cost breakdown.
+  function quoteText(o) {
+    var r = compute(o), c = findClient(o.clientId), s = state.settings;
+    var first = c ? c.name.trim().split(/\s+/)[0] : "";
+    var out = [(first ? t("hello") + " " + first + ", " : t("hello") + ", ") + t("quoteIntro") + (o.name ? " *" + o.name.trim() + "*" : "") + ":", ""];
+    o.prints.forEach(function (p, i) {
+      var c2 = r.lines[i];
+      out.push("• " + printLabel(p, i) + " x" + c2.pieces + ": " + money(c2.price) + (c2.pieces > 1 ? " (" + money(c2.unit) + " " + t("each") + ")" : ""));
+    });
+    out.push("");
+    out.push(t("subtotal") + ": " + money(r.subtotal));
+    if (r.taxAmt) out.push((s.taxName || t("taxAmt")) + " (" + num(o.tax) + "%): " + money(r.taxAmt));
+    if (r.ship) out.push(t("ship") + ": " + money(r.ship));
+    out.push("*" + t("total") + ": " + money(r.total) + "*");
+    out.push("");
+    out.push(t("thanks") + (s.business ? " " + s.business : ""));
+    return out.join("\n");
+  }
+  function waDigits(phone) {
+    var d = String(phone || "").replace(/\D/g, ""), cc = String(state.settings.cc || "").replace(/\D/g, "");
+    if (!d) return "";
+    if (/^00/.test(d)) return d.slice(2);
+    if (/^0/.test(d)) return cc + d.slice(1);
+    if (cc && d.indexOf(cc) !== 0 && d.length <= 9) return cc + d;
+    return d;
+  }
+  function waLink(phone, text) {
+    var d = waDigits(phone);
+    return "https://wa.me/" + d + (text ? "?text=" + encodeURIComponent(text) : "");
+  }
+
+  // Quote as a PNG, drawn on a canvas.
+  function quoteImage(o) {
+    var r = compute(o), s = state.settings, c = findClient(o.clientId);
+    var W = 1080, pad = 72, lineH = 58;
+    var rows = o.prints.map(function (p, i) { return [printLabel(p, i) + "  x" + r.lines[i].pieces, money(r.lines[i].price)]; });
+    var tail = [[t("subtotal"), money(r.subtotal)]];
+    if (r.taxAmt) tail.push([(s.taxName || t("taxAmt")) + " " + num(o.tax) + "%", money(r.taxAmt)]);
+    if (r.ship) tail.push([t("ship"), money(r.ship)]);
+    var H = pad + 150 + (c ? 60 : 0) + 40 + rows.length * lineH + 30 + tail.length * lineH + 140 + pad;
+    var cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    var g = cv.getContext("2d");
+    g.fillStyle = "#0f1311"; g.fillRect(0, 0, W, H);
+    g.fillStyle = "#1fd16b"; g.fillRect(0, 0, W, 12);
+    var y = pad + 40;
+    g.textBaseline = "alphabetic";
+    g.font = "600 52px 'Chakra Petch', system-ui, sans-serif"; g.fillStyle = "#e8eee9";
+    g.fillText(s.business || "TebaCalc", pad, y);
+    g.font = "400 30px 'IBM Plex Sans', system-ui, sans-serif"; g.fillStyle = "#8e9a92";
+    y += 50; g.fillText(t("quote") + " · " + new Date().toLocaleDateString(loc()), pad, y);
+    if (o.name) { g.textAlign = "right"; g.fillText(o.name.trim(), W - pad, y); g.textAlign = "left"; }
+    y += 60;
+    if (c) { g.fillStyle = "#e8eee9"; g.font = "500 34px 'IBM Plex Sans', system-ui, sans-serif"; g.fillText(c.name, pad, y); y += 60; }
+    g.strokeStyle = "#2c352f"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(pad, y - 20); g.lineTo(W - pad, y - 20); g.stroke();
+    y += 20;
+    function line(a, b, color, font) {
+      g.font = font || "400 32px 'IBM Plex Sans', system-ui, sans-serif"; g.fillStyle = color || "#e8eee9";
+      var maxW = W - pad * 2 - 300, txt = a;
+      while (g.measureText(txt).width > maxW && txt.length > 4) txt = txt.slice(0, -2);
+      if (txt !== a) txt += "…";
+      g.fillText(txt, pad, y);
+      g.textAlign = "right"; g.font = "500 32px 'IBM Plex Mono', ui-monospace, monospace"; g.fillText(b, W - pad, y); g.textAlign = "left";
+      y += lineH;
+    }
+    rows.forEach(function (rw) { line(rw[0], rw[1]); });
+    g.beginPath(); g.moveTo(pad, y - 30); g.lineTo(W - pad, y - 30); g.stroke();
+    y += 10;
+    tail.forEach(function (rw) { line(rw[0], rw[1], "#8e9a92"); });
+    y += 30;
+    g.fillStyle = "#1fd16b"; g.fillRect(pad - 20, y - 70, W - pad * 2 + 40, 110);
+    g.fillStyle = "#04140a"; g.font = "600 44px 'Chakra Petch', system-ui, sans-serif"; g.fillText(t("total").toUpperCase(), pad + 10, y);
+    g.textAlign = "right"; g.font = "600 48px 'IBM Plex Mono', ui-monospace, monospace"; g.fillText(money(r.total), W - pad - 10, y); g.textAlign = "left";
+    var out = document.createElement("canvas"); out.width = W; out.height = Math.min(H, y + 40 + pad);
+    var og = out.getContext("2d"); og.fillStyle = "#0f1311"; og.fillRect(0, 0, W, out.height); og.drawImage(cv, 0, 0);
+    return new Promise(function (res) { out.toBlob(function (b) { res(b); }, "image/png"); });
+  }
+
+  var sendCtx = null;
+  function showSend(o) {
+    sendCtx = o;
+    var c = findClient(o.clientId), phone = c && c.phone;
+    var thumbs = (o.files || []).map(function (id) {
+      return '<label><input type="checkbox" data-sendfile="' + id + '">' + (isImage(id) ? '<img alt="" data-file="' + id + '">' : '<span class="pill">' + esc(extOf(id)) + "</span>") + "<span>" + esc(fileMeta(id).name) + "</span></label>";
+    }).join("");
+    openSheet("<h3>" + esc(t("sendTitle")) + "</h3>" +
+      (c ? '<p class="hint">' + esc(c.name) + (phone ? " · +" + esc(waDigits(phone)) : "") + "</p>" : "") +
+      '<label class="f"><span>' + esc(t("msg")) + '</span><textarea class="msg" id="send-text">' + esc(quoteText(o)) + "</textarea></label>" +
+      '<div><p class="hint">' + esc(t("attach")) + '</p><label class="check"><input type="checkbox" id="send-img"> ' + esc(t("quoteImg")) + "</label>" +
+      (thumbs ? '<div class="thumbs">' + thumbs + "</div>" : "") + "</div>" +
+      (phone ? "" : '<p class="hint">' + esc(t("waNoPhone")) + "</p>") +
+      '<a class="wa" id="send-wa" target="_blank" rel="noopener" href="' + esc(waLink(phone, quoteText(o))) + '">' + esc(t("openWa")) + "</a>" +
+      '<button type="button" class="wa" id="send-share" data-act="doshare" hidden>' + esc(t("shareWa")) + "</button>" +
+      '<div class="actions"><button type="button" data-act="copytext">' + esc(t("copyText")) + '</button><button type="button" data-act="close">' + esc(t("close")) + "</button></div>");
+  }
+  function syncSendButtons() {
+    var anyFile = !!overlay.querySelector("#send-img:checked, [data-sendfile]:checked");
+    var a = document.getElementById("send-wa"), b = document.getElementById("send-share"), txt = document.getElementById("send-text");
+    if (!a) return;
+    a.hidden = anyFile; b.hidden = !anyFile;
+    var c = findClient(sendCtx.clientId);
+    a.href = waLink(c && c.phone, txt.value);
+  }
+  function doShare() {
+    var o = sendCtx, text = document.getElementById("send-text").value;
+    var ids = Array.prototype.map.call(overlay.querySelectorAll("[data-sendfile]:checked"), function (el) { return el.dataset.sendfile; });
+    var wantImg = document.getElementById("send-img").checked;
+    toast(t("working"));
+    Promise.all([wantImg ? quoteImage(o) : null].concat(ids.map(fileGet))).then(function (res) {
+      var files = [];
+      if (res[0]) files.push({ name: "cotizacion.png", blob: res[0] });
+      res.slice(1).forEach(function (f, i) { if (f) files.push({ name: fileMeta(ids[i]).name, blob: f.blob }); });
+      return shareFiles(text, files, t("send"));
+    }).catch(function (e) { if (e && e.message === "noshare") toast(t("shareOnlyApp")); });
+  }
+
+  function clientForm(c) {
+    var isNew = !c; c = c || { id: "", name: "", phone: "", address: "", email: "", notes: "" };
+    var orders = isNew ? [] : state.history.filter(function (o) { return o.clientId === c.id; });
+    var cf = function (label, key, type, ph) { return '<label class="f"><span>' + esc(label) + '</span><input id="cf-' + key + '" name="' + key + '" type="' + type + '" value="' + esc(c[key]) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : "") + "></label>"; };
+    openSheet("<h3>" + esc(isNew ? t("newClient").replace("+ ", "") : c.name) + "</h3>" +
+      '<form id="client-form" data-id="' + esc(c.id) + '">' +
+        cf(t("clientName"), "name", "text") + cf(t("phone"), "phone", "tel", "099 123 456") + cf(t("address"), "address", "text") +
+        cf(t("email"), "email", "email") + cf(t("notes"), "notes", "text", t("notesPh")) +
+        '<div class="actions"><button type="submit" class="primary">' + esc(t("save")) + "</button>" +
+        (isNew ? "" : '<button type="button" class="danger" data-act="delclient">' + esc(t("del")) + "</button>") + "</div>" +
+      "</form>" +
+      (orders.length ? '<p class="hint">' + esc(t("clientOrders")) + '</p><div class="rows">' + orders.map(function (o) {
+        return '<div class="row"><span>' + esc(orderLabel(o)) + '<span class="d">' + esc(new Date(o.savedAt || Date.now()).toLocaleDateString(loc())) + "</span></span><span>" + esc(money(compute(o).total)) + "</span></div>";
+      }).join("") + '</div><p class="hint">' + esc(t("boughtTotal")) + ": " + esc(money(clientStats(c.id).sum)) + "</p>" : "") +
+      '<button type="button" data-act="close">' + esc(t("close")) + "</button>");
+  }
+
+  // ---------- backup ----------
+  function exportAll() {
+    toast(t("working"));
+    var ids = Object.keys(state.fileMeta);
+    Promise.all(ids.map(function (id) {
+      return fileGet(id).then(function (f) { return f ? blobToBase64(f.blob).then(function (b) { return { id: id, data: b }; }) : null; });
+    })).then(function (files) {
+      var data = JSON.stringify({ app: "tebacalc", v: 3, exportedAt: new Date().toISOString(), state: state, files: files.filter(Boolean) });
+      var name = "TebaCalc-respaldo-" + new Date().toISOString().slice(0, 10) + ".json";
+      return shareFiles("", [{ name: name, blob: new Blob([data], { type: "application/json" }) }], t("exportData")).then(function () { toast(t("exported")); });
+    }).catch(function (e) { if (e && e.message === "noshare") toast(t("shareOnlyApp")); });
+  }
+  var pendingImport = null;
+  function base64ToBlob(b64, type) {
+    var bin = atob(b64), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: type || "" });
+  }
+  function applyImport() {
+    var d = pendingImport; pendingImport = null;
+    var old = Object.keys(state.fileMeta);
+    Promise.all(old.map(fileDel)).then(function () {
+      return Promise.all((d.files || []).map(function (f) {
+        var meta = d.state.fileMeta[f.id] || {};
+        return filePut({ id: f.id, blob: base64ToBlob(f.data, meta.type) });
+      }));
+    }).then(function () {
+      state = d.state; state.example = false;
+      if (!state.job) state.job = newOrder(state);
+      Object.keys(urlCache).forEach(function (k) { URL.revokeObjectURL(urlCache[k]); }); urlCache = {};
+      kvSet("state", state); closeSheet(); view = "calc"; render(); toast(t("importOk"));
+    });
+  }
+
+  var toastTimer;
+  function toast(msg) {
+    var el = document.getElementById("toast");
+    if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 2400);
+  }
+  function copyText(text) {
+    var fallback = function () {
+      openSheet("<h3>" + esc(t("copyText")) + '</h3><p class="hint">' + esc(t("copyFallback")) + '</p><textarea class="copy" id="copybox" readonly>' + esc(text) + '</textarea><button type="button" data-act="close">' + esc(t("close")) + "</button>");
+      var b = document.getElementById("copybox"); b.focus(); b.select();
+    };
+    try { navigator.clipboard.writeText(text).then(function () { toast(t("copied")); }, fallback); } catch (e) { fallback(); }
+  }
+
+  // ---------- events ----------
+  function syncJobMaterials() {
+    state.job.prints.forEach(function (p) { p.fil.forEach(function (f) { var m = findMat(f.mat); if (m) { f.price = m.price; f.weight = m.weight; f.color = m.color; } }); });
+  }
+  function markSyms() { main.querySelectorAll("[data-sym]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.sym === state.settings.sym)); }); }
+  function refocus(id) { var pos; var el = document.getElementById(id); pos = el && el.selectionStart; render(); el = document.getElementById(id); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } }
+
+  main.addEventListener("input", function (e) {
+    var el = e.target, d = el.dataset;
+    if (view === "calc") {
+      if (d.k) state.job[d.k] = el.value;
+      if (d.pk) state.job.prints[+d.p][d.pk] = el.value;
+      if (d.f) {
+        var f = state.job.prints[+d.p].fil[+d.fi]; f[d.f] = el.value;
+        if (d.f === "color") { var dot = document.getElementById("dot-" + d.p + "-" + d.fi); if (dot) dot.style.background = el.value; }
+      }
+      persist(); updatePrice();
+    } else if (view === "history" && el.id === "h-search") { refocus("h-search"); }
+    else if (view === "clients" && el.id === "c-search") { refocus("c-search"); }
+    else if (view === "settings") {
+      state.example = false;
+      if (d.set) state.settings[d.set] = d.text ? el.value : num(el.value);
+      if (d.s) {
+        var box = el.closest(".fil"), item = state[box.dataset.coll][+box.dataset.i];
+        item[d.s] = el.type === "text" || el.type === "color" ? el.value : num(el.value);
+        if (d.s === "color") box.querySelector(".dot").style.background = el.value;
+        syncJobMaterials();
+      }
+      if (el.id === "s-symc" && el.value.trim()) { state.settings.sym = el.value.trim(); markSyms(); }
+      persist();
+    }
+  });
+  main.addEventListener("change", function (e) {
+    var el = e.target, d = el.dataset;
+    if (el.id === "add-files" || el.id === "add-camera") { state.example = false; addFiles(el.files); el.value = ""; return; }
+    if (view === "calc" && d.f === "mat") {
+      var f = state.job.prints[+d.p].fil[+d.fi], m = findMat(el.value);
+      f.mat = el.value; if (m) { f.price = m.price; f.weight = m.weight; f.color = m.color; }
+      persist(); render();
+    } else if (view === "calc" && (d.pk === "printer" || d.k === "clientId")) {
+      persist(); updatePrice();
+    } else if (view === "settings") {
+      if (el.id === "s-dec") state.settings.dec = num(el.value);
+      if (el.id === "s-lang") state.settings.lang = el.value;
+      persist(); render();
+    }
+  });
+
+  var armed = null;
+  function arm(b) {
+    if (armed === b) { armed = null; return true; }
+    disarm(); armed = b; b.dataset.label = b.textContent; b.textContent = t("sure"); b.classList.add("armed"); return false;
+  }
+  function disarm() { if (armed) { armed.classList.remove("armed"); armed.textContent = armed.dataset.label; armed = null; } }
+
+  main.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    var act = b.dataset.act, d = b.dataset, j = state.job;
+    if (d.sym) { state.example = false; state.settings.sym = d.sym; var c = document.getElementById("s-symc"); if (c) c.value = ""; persist(); render(); return; }
+    if (act === "toggle") { var p = j.prints[+d.p]; p.open = !p.open; persist(); render(); return; }
+    if (act === "addprint") { j.prints.forEach(function (x) { x.open = false; }); j.prints.push(newPrint(state, j.prints.length + 1)); persist(); render(); return; }
+    if (act === "dupprint") { var cp = clone(j.prints[+d.p]); cp.id = uid(); cp.open = true; cp.name = cp.name ? cp.name + " (2)" : ""; j.prints[+d.p].open = false; j.prints.splice(+d.p + 1, 0, cp); persist(); render(); return; }
+    if (act === "rmprint") { if (!arm(b)) return; j.prints.splice(+d.p, 1); persist(); render(); return; }
+    if (act === "addfil") { j.prints[+d.p].fil.push(newFil(state)); persist(); render(); return; }
+    if (act === "rmfil") { j.prints[+d.p].fil.splice(+d.fi, 1); persist(); render(); return; }
+    if (act === "rmfile") { if (!arm(b)) return; var id = b.closest(".file").dataset.id; j.files = j.files.filter(function (x) { return x !== id; }); persist(); render(); gcFiles(); return; }
+    if (act === "newclient") { clientForm(null); return; }
+    if (act === "editclient") { clientForm(findClient(b.closest(".item").dataset.id)); return; }
+    if (act === "orderfor") { state.example = false; state.job = newOrder(state, b.closest(".item").dataset.id); view = "calc"; persist(); render(); window.scrollTo(0, 0); return; }
+    if (act === "addmat") { state.example = false; state.materials.push({ id: uid(), name: t("newMat"), type: "PLA", color: "#ffffff", price: 0, weight: 1000 }); persist(); render(); return; }
+    if (act === "addprinter") { state.example = false; state.printers.push({ id: uid(), name: t("newPrinter"), watts: 120, price: 0, life: 5000, maint: 0 }); persist(); render(); return; }
+    if (act === "rm") { if (!arm(b)) return; var box = b.closest(".fil"); state.example = false; state[box.dataset.coll].splice(+box.dataset.i, 1); persist(); render(); return; }
+    if (act === "del") { if (!arm(b)) return; var hid = b.closest(".item").dataset.id; state.history = state.history.filter(function (h) { return h.id !== hid; }); persist(); render(); gcFiles(); return; }
+    if (act === "open" || act === "sendorder") {
+      var o = findIn(state.history, b.closest(".item").dataset.id);
+      if (act === "sendorder") { showSend(o); return; }
+      state.job = clone(o); state.job.prints[0].open = true; view = "calc"; persist(); render(); window.scrollTo(0, 0); return;
+    }
+    if (act === "export") { exportAll(); return; }
+    if (act === "import") { document.getElementById("import-file").click(); return; }
+  });
+  document.addEventListener("click", function (e) { if (armed && e.target.closest("button") !== armed) disarm(); }, true);
+
+  overlay.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-act]"); if (!el) return;
+    var act = el.dataset.act;
+    if (act === "close") { if (el.tagName === "BUTTON" || e.target === el) closeSheet(); return; }
+    if (act === "save") { saveJob(); closeSheet(); toast(t("saved")); return; }
+    if (act === "send") { saveJob(); showSend(state.job); return; }
+    if (act === "new") { var keep = state.job.prints[0] && state.job.prints[0].printer; state.example = false; state.job = newOrder(state); if (findPrinter(keep)) state.job.prints[0].printer = keep; persist(); closeSheet(); render(); window.scrollTo(0, 0); gcFiles(); return; }
+    if (act === "copytext") { copyText(document.getElementById("send-text").value); return; }
+    if (act === "doshare") { doShare(); return; }
+    if (act === "delclient") {
+      if (!arm(el)) return;
+      var cid = document.getElementById("client-form").dataset.id;
+      state.clients = state.clients.filter(function (c) { return c.id !== cid; });
+      if (state.job.clientId === cid) state.job.clientId = "";
+      persist(); closeSheet(); render(); return;
+    }
+    if (act === "doimport") { applyImport(); return; }
+  });
+  overlay.addEventListener("change", function (e) { if (e.target.id === "send-img" || e.target.dataset.sendfile) syncSendButtons(); });
+  overlay.addEventListener("input", function (e) { if (e.target.id === "send-text") syncSendButtons(); });
+  overlay.addEventListener("submit", function (e) {
+    if (e.target.id !== "client-form") return;
+    e.preventDefault();
+    var f = e.target, id = f.dataset.id, data = {};
+    ["name", "phone", "address", "email", "notes"].forEach(function (k) { data[k] = f.elements[k].value.trim(); });
+    if (!data.name) { toast(t("nameRequired")); return; }
+    var c = findClient(id);
+    if (c) Object.keys(data).forEach(function (k) { c[k] = data[k]; });
+    else { c = data; c.id = uid(); c.created = Date.now(); state.clients.push(c); if (view === "calc") state.job.clientId = c.id; }
+    state.example = false; persist(); closeSheet(); render();
+  });
+  document.getElementById("import-file").addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      try {
+        var d = JSON.parse(rd.result);
+        if (!d || d.app !== "tebacalc" || !d.state || !d.state.settings) throw 0;
+        pendingImport = d;
+        openSheet("<h3>" + esc(t("importData")) + '</h3><p class="hint">' + esc(t("importConfirm")) + "</p>" +
+          '<p class="hint">' + esc((d.state.clients || []).length + " " + t("clients").toLowerCase() + " · " + (d.state.history || []).length + " " + t("ordersN") + " · " + (d.files || []).length + " 📎") + "</p>" +
+          '<div class="actions"><button type="button" class="primary" data-act="doimport">' + esc(t("importDo")) + '</button><button type="button" data-act="close">' + esc(t("close")) + "</button></div>");
+      } catch (x) { toast(t("importBad")); }
+    };
+    rd.readAsText(file);
+  });
+  // In the installed app, open WhatsApp links as a top-level navigation so Android hands them to WhatsApp.
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest("a.wa"); if (!a || !cap()) return;
+    e.preventDefault(); window.location.href = a.href;
+  });
+  document.getElementById("pb-btn").addEventListener("click", showBreakdown);
+  document.getElementById("tabs").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-view]"); if (!b) return;
+    view = b.dataset.view; render(); window.scrollTo(0, 0);
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+
+  // ---------- boot ----------
+  idb().then(function () { return kvGet("state"); }).then(function (saved) {
+    if (saved && saved.v === 3) state = saved;
+    else {
+      var legacy = null;
+      try { legacy = JSON.parse(localStorage.getItem(LEGACY_KEY)); } catch (e) {}
+      state = legacy && legacy.settings ? migrateV2(legacy) : defaults();
+      if (!state.job) state.job = exampleOrder(state);
+      kvSet("state", state);
+    }
+    ["clients", "history"].forEach(function (k) { if (!state[k]) state[k] = []; });
+    if (!state.fileMeta) state.fileMeta = {};
+    render();
+  });
+})();
+</script>
