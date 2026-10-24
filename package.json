@@ -1,6 +1,6 @@
 {
   "name": "tebacalc",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "scripts": {
     "build": "node scripts/build-www.js",
@@ -8,7 +8,9 @@
   },
   "dependencies": {
     "@capacitor/android": "6.2.0",
-    "@capacitor/core": "6.2.0"
+    "@capacitor/core": "6.2.0",
+    "@capacitor/filesystem": "6.0.4",
+    "@capacitor/share": "6.0.4"
   },
   "devDependencies": {
     "@capacitor/cli": "6.2.0"
