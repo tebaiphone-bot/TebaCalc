@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -26,3 +29,12 @@ jobs:
         with:
           name: TebaCalc-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish APK as a direct download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk TebaCalc.apk
+          gh release delete ultima --yes --cleanup-tag || true
+          gh release create ultima TebaCalc.apk --target "$GITHUB_SHA" --prerelease \
+            --title "TebaCalc (última compilación)" \
+            --notes "Rama ${GITHUB_REF_NAME}, compilación ${GITHUB_RUN_NUMBER}. Descargá TebaCalc.apk e instalalo en Android."
